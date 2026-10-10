@@ -72,7 +72,7 @@ function ensureWanted(battle) {
 
 function lemuen(bb, chess, def) {
   const t0 = tbb(def, 0), t1 = tbb(def, 1), tb = def?.traitBb || {};
-  const baseAim = 0.1;
+  const baseAim = Math.max(0.05, num(bb['attack@aim_interval'], 0.5));
   const calcAimInterval = (unit) => Math.max(0.033, baseAim * 100 / Math.max(20, unit.s.aspd));
   const d1 = num(bb['attack@dist_1'], 0.8);
   const d2 = num(bb['attack@dist_2'], num(bb['attack@projectile_range'], 1.5));
@@ -203,28 +203,13 @@ function lemuen(bb, chess, def) {
         m.lemAcc += dt;
         const aimInterval = calcAimInterval(unit);
         if (m.lemAcc + 1e-9 < aimInterval) return;
-
-        // When ammo is high (> 100, e.g. high Laterano stacks), consume and lock in batches
-        const batch = skill.ammoLeft > 100
-          ? Math.min(skill.ammoLeft, Math.max(2, Math.floor(skill.ammoLeft / 50)))
-          : 1;
-
-        let lockedCount = 0;
-        for (let k = 0; k < batch && skill.ammoLeft > 0; k++) {
-          const e = pickLock(battle, unit, m.lemLocks);
-          if (!e) break;
-          lockedCount++;
-          m.lemLocks.push({ e, x: e.x, y: e.y });
-          battle.fx('lock', { x: e.x, y: e.y, id: e.id, src: unit.id, hold: 1 });
-          skill.ammoLeft--;
-          battle.emit('ammoUsed', { unit, left: skill.ammoLeft, skill });
-        }
-
-        if (lockedCount === 0) {
-          m.lemAcc = aimInterval; // nothing to lock: wait, ready immediately when enemy arrives
-          return;
-        }
+        const e = pickLock(battle, unit, m.lemLocks);
+        if (!e) { m.lemAcc = aimInterval; return; } // nothing to lock: wait, ready immediately when enemy arrives
         m.lemAcc = Math.max(0, m.lemAcc - aimInterval);
+        m.lemLocks.push({ e, x: e.x, y: e.y });
+        battle.fx('lock', { x: e.x, y: e.y, id: e.id, src: unit.id, hold: 1 });
+        skill.ammoLeft--;
+        battle.emit('ammoUsed', { unit, left: skill.ammoLeft, skill });
         if (skill.active && skill.ammoLeft <= 0) skill.end('ammo');
       },
       onEnd({ battle, unit, reason }) {

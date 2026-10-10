@@ -25,8 +25,8 @@ test('Lemuen S3 lock speed scales with ASPD and consumes ammo fast', () => {
   assert.ok(h100.runUntil(() => !u100.skill.active, 5), 'S3 finished at 100 ASPD');
   const dur100 = h100.b.time - tStart100;
 
-  // At 100 ASPD, 5 ammo with 0.1s base interval: first lock immediate (0.0s), 4 more locks take 4 * 0.1s = 0.4s
-  assert.ok(dur100 <= 0.55, `duration at 100 ASPD should be <= 0.55s, was ${dur100}s`);
+  // At 100 ASPD, 5 ammo with 0.5s base interval: first lock immediate (0.0s), 4 more locks take 4 * 0.5s = 2.0s
+  assert.ok(dur100 <= 2.15 && dur100 >= 1.9, `duration at 100 ASPD should be ~2.0s, was ${dur100}s`);
 
   // Test at 200 ASPD
   const h200 = makeBattle({
@@ -46,12 +46,12 @@ test('Lemuen S3 lock speed scales with ASPD and consumes ammo fast', () => {
   assert.ok(h200.runUntil(() => !u200.skill.active, 5), 'S3 finished at 200 ASPD');
   const dur200 = h200.b.time - tStart200;
 
-  // At 200 ASPD (total 200), interval is 0.1 * 100 / 200 = 0.05s. 4 intervals = 0.20s
+  // At 200 ASPD (total 200), interval is 0.5 * 100 / 200 = 0.25s. 4 intervals = 1.0s
   assert.ok(dur200 < dur100, `higher ASPD should lock faster: dur200 (${dur200}) < dur100 (${dur100})`);
-  assert.ok(dur200 <= 0.35, `duration at 200 ASPD should be <= 0.35s, was ${dur200}s`);
+  assert.ok(dur200 <= 1.15 && dur200 >= 0.9, `duration at 200 ASPD should be ~1.0s, was ${dur200}s`);
 });
 
-test('Lemuen S3 with >100 ammo batch-locks and fires all shells without 33-cap truncation', () => {
+test('Lemuen S3 with >100 ammo locks one-by-one by interval and fires all shells without 33-cap truncation', () => {
   let shellsCount = 0;
   const h = makeBattle({
     defs: DEFS, seed: 7, timeLimit: 200,
@@ -77,10 +77,10 @@ test('Lemuen S3 with >100 ammo batch-locks and fires all shells without 33-cap t
   const u = h.unit(LEM);
   assert.ok(h.runUntil(() => u.skill.active, 5), 'S3 active');
   const tStart = h.b.time;
-  assert.ok(h.runUntil(() => !u.skill.active, 15), 'S3 finishes 120 ammo rapidly');
+  assert.ok(h.runUntil(() => !u.skill.active, 70), 'S3 finishes 120 ammo one by one');
   const lockTime = h.b.time - tStart;
-  // 120 ammo: >100 batch (2/tick) takes 1s, remaining 100 takes 10s => ~11s (down from 60s originally!)
-  assert.ok(lockTime <= 12, `120 ammo should finish quickly with batching, took ${lockTime}s`);
+  // 120 ammo locks one-by-one without batching: 1st lock at 0s, 119 intervals * 0.5s = 59.5s
+  assert.ok(lockTime >= 59 && lockTime <= 61, `120 ammo locked one-by-one took ${lockTime}s`);
 
   // Wait for bombardment
   h.run(12);
