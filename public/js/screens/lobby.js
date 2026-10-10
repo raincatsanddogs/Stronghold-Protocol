@@ -277,6 +277,10 @@ export function LobbyScreen() {
     // `onClick=${join}` hands the click EVENT as the first argument, and a default parameter only applies to
     // `undefined` — codeArg keeps an event target out of the key and falls back to the input field
     const k = codeArg(c, code);
+    if (k && k.trim().toLowerCase() === 'test') {
+      location.href = '/dev/ember-test.html';
+      return;
+    }
     if (!k) { toast(t('同盟密钥为 {ROOM_CODE_LEN} 位字母或数字', { ROOM_CODE_LEN }), 'warn'); return; }
     run('join', () => net.request('room.join', { code: k }));
   };
@@ -284,6 +288,10 @@ export function LobbyScreen() {
   const spectate = (c = code) => {
     // same guard as join: `onClick=${spectate}` passes the click event, not a code
     const k = codeArg(c, code);
+    if (k && k.trim().toLowerCase() === 'test') {
+      location.href = '/dev/ember-test.html';
+      return;
+    }
     if (!k) { toast(t('同盟密钥为 {ROOM_CODE_LEN} 位字母或数字', { ROOM_CODE_LEN }), 'warn'); return; }
     run('spectate', () => net.request('room.spectate', { code: k }).catch((err) => {
       // Clearer than the bare ERR_TEXT: the usual cause is a code that is not the host's (a remembered one from an

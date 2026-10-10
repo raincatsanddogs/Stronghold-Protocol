@@ -350,6 +350,11 @@ async function boot() {
   const identityReady = identity.init();
 
   const pendingJoin = parseRoomParam(location.search);
+  const rawRoom = new URLSearchParams(location.search).get('room')?.trim().toLowerCase();
+  if (rawRoom === 'test' || pendingJoin === 'TEST') {
+    location.replace('/dev/ember-test.html');
+    return;
+  }
   const savedName = sanitizeName(identity.loadName());
   const entered = identity.wasEntered() && !!savedName;
   store.set((s) => ({

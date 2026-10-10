@@ -72,7 +72,8 @@ function ensureWanted(battle) {
 
 function lemuen(bb, chess, def) {
   const t0 = tbb(def, 0), t1 = tbb(def, 1), tb = def?.traitBb || {};
-  const aim = Math.max(0.05, num(bb['attack@aim_interval'], 0.5));
+  const baseAim = 0.1;
+  const calcAimInterval = (unit) => Math.max(0.033, baseAim * 100 / Math.max(20, unit.s.aspd));
   const d1 = num(bb['attack@dist_1'], 0.8);
   const d2 = num(bb['attack@dist_2'], num(bb['attack@projectile_range'], 1.5));
   const s1 = num(bb['attack@proj_atk_scale_1'], 1), s2 = num(bb['attack@proj_atk_scale_2'], 1);
@@ -94,7 +95,7 @@ function lemuen(bb, chess, def) {
   // emit_offset 0.2) around its lock mark — the locked enemy while it is on the field ("持续追踪锁定目标"), else the spot
   // it left ("锁定标记会留在原地") — landing LEMUEN_SHELL_FLIGHT s later; each shell hits every enemy within dist_2 once
   // (limited_hit_time 1): proj_atk_scale_1 × ATK within dist_1 of its point, proj_atk_scale_2 × ATK beyond, all with the
-  // ATK cached when the skill ended ("缓存攻击力"); at most LEMUEN_SHELL_WINDOW s of shells ("最多产生33次轰炸").
+  // ATK cached when the skill ended ("缓存攻击力"); all locked shells fire within LEMUEN_SHELL_WINDOW s.
   const spread = Math.max(0, num(bb['attack@emit_offset'], 0.2));
   const markOf = (L) => {
     const e = L.e;
@@ -116,7 +117,8 @@ function lemuen(bb, chess, def) {
   const bombard = (battle, unit, locks) => {
     const atk = unit.s.atk;
     const seq = unit.deploySeq;
-    const n = Math.min(locks.length, Math.floor(LEMUEN_SHELL_WINDOW / LEMUEN_SHELL_INTERVAL + 1e-9));
+    const n = locks.length;
+    const shellInterval = n > 0 ? Math.min(LEMUEN_SHELL_INTERVAL, LEMUEN_SHELL_WINDOW / n) : LEMUEN_SHELL_INTERVAL;
     const fire = (i) => {
       // knocked out / withdrawn after the skill ended: the shells not fired yet are dropped (those in the air land)
       if (!(unit.alive && unit.deployed && unit.deploySeq === seq)) return;
@@ -126,7 +128,7 @@ function lemuen(bb, chess, def) {
       const x = L.x + ox, y = L.y + oy;
       battle.fx('bombardShell', { x, y, id: unit.id, r: d2, t: LEMUEN_SHELL_FLIGHT, i });
       battle.after(LEMUEN_SHELL_FLIGHT, () => blast(battle, unit, atk, x, y), { owner: unit });
-      if (i + 1 < n) battle.after(LEMUEN_SHELL_INTERVAL, () => fire(i + 1), { owner: unit });
+      if (i + 1 < n) battle.after(shellInterval, () => fire(i + 1), { owner: unit });
     };
     if (n > 0) fire(0);
   };
@@ -192,21 +194,37 @@ function lemuen(bb, chess, def) {
       ammo: Math.max(1, Math.floor(num(bb['attack@trigger_time'], 5))),
       attack: { noAttack: true },
       allyTargets: true,   // its locks take 白铁's 铁钳号 too (pickLock) — skills.js allyTargetsOk
-      onStart({ unit }) { unit.mem.lemLocks = []; unit.mem.lemAcc = aim; },
+      onStart({ unit }) { unit.mem.lemLocks = []; unit.mem.lemAcc = calcAimInterval(unit); },
       onTick({ battle, unit, skill, dt }) {
         const m = unit.mem;
         if (!m.lemLocks) return;
         for (const L of m.lemLocks) markOf(L);
         if (!unit.canAct) return;
         m.lemAcc += dt;
-        if (m.lemAcc + 1e-9 < aim) return;
-        const e = pickLock(battle, unit, m.lemLocks);
-        if (!e) { m.lemAcc = aim; return; }   // nothing to lock: wait, the next lock ready the moment an enemy comes
-        m.lemAcc -= aim;
-        m.lemLocks.push({ e, x: e.x, y: e.y });
-        battle.fx('lock', { x: e.x, y: e.y, id: e.id, src: unit.id, hold: 1 });
-        skill.ammoLeft--;
-        battle.emit('ammoUsed', { unit, left: skill.ammoLeft, skill });
+        const aimInterval = calcAimInterval(unit);
+        if (m.lemAcc + 1e-9 < aimInterval) return;
+
+        // When ammo is high (> 100, e.g. high Laterano stacks), consume and lock in batches
+        const batch = skill.ammoLeft > 100
+          ? Math.min(skill.ammoLeft, Math.max(2, Math.floor(skill.ammoLeft / 50)))
+          : 1;
+
+        let lockedCount = 0;
+        for (let k = 0; k < batch && skill.ammoLeft > 0; k++) {
+          const e = pickLock(battle, unit, m.lemLocks);
+          if (!e) break;
+          lockedCount++;
+          m.lemLocks.push({ e, x: e.x, y: e.y });
+          battle.fx('lock', { x: e.x, y: e.y, id: e.id, src: unit.id, hold: 1 });
+          skill.ammoLeft--;
+          battle.emit('ammoUsed', { unit, left: skill.ammoLeft, skill });
+        }
+
+        if (lockedCount === 0) {
+          m.lemAcc = aimInterval; // nothing to lock: wait, ready immediately when enemy arrives
+          return;
+        }
+        m.lemAcc = Math.max(0, m.lemAcc - aimInterval);
         if (skill.active && skill.ammoLeft <= 0) skill.end('ammo');
       },
       onEnd({ battle, unit, reason }) {

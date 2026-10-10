@@ -210,6 +210,10 @@ export function TitleScreen() {
 
   const valid = isValidName(name);
   const start = () => {
+    if (name.trim().toLowerCase() === 'test') {
+      location.href = '/dev/ember-test.html';
+      return;
+    }
     if (!valid) { toast(t('请输入博士代号'), 'warn'); return; }
     enterSession(name);
   };
@@ -248,6 +252,7 @@ export function TitleScreen() {
     <div class="title-corner title-corner--tr">
       <div>
         <div class="title-corner__tools">
+          <${Button} variant="ghost" size="sm" icon="flask" class="title-dev-test" onClick=${() => { location.href = '/dev/ember-test.html'; }} title=${t('战斗调试台 (test)')}>${t('测试台')}<//>
           <${Button} variant="ghost" size="sm" icon="chart" class="title-stats" onClick=${openStats} title=${t('统计数据')}>${t('统计')}<//>
           <${LangToggle} class="title-lang" />
         </div>
