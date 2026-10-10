@@ -3,13 +3,6 @@ import { meleeOnHighGround } from '../../shared/highGround.js';
 import { createFieldView } from '../js/render/app.js';
 import { data } from '../js/data.js';
 import { assets } from '../js/assets.js';
-import { loadBrowserSim } from '../js/battle/runner.js';
-import { fxForm } from '../../shared/protocol.js';
-import { meleeOnHighGround } from '../../shared/highGround.js';
-import { createFieldView } from '../js/render/app.js';
-import { data } from '../js/data.js';
-import { assets } from '../js/assets.js';
-import { loadBrowserSim } from '../js/battle/runner.js';
 import { battleCatalog, defaultBattleConfig, enemyContext, createBattleScenario, setAutoAttack, isFrequencyTarget, testDamage, fillSp, addAmmo, healOperator, spawnExtraEnemy, clearEnemies } from './battle-scenario.js';
 
 const el = (id) => document.getElementById(id);
@@ -244,7 +237,9 @@ function damage(options) {
   flush();
 }
 try {
-  await data.loadAll('chess', 'tokens', 'items', 'enemies', 'stages', 'bonds', 'config', 'bosses', 'waves', 'backups');
+  await data.loadAll('chess', 'tokens', 'items', 'enemies', 'stages', 'bonds', 'config', 'bosses', 'waves', 'backups', 'assets', 'local');
+  if (data.get('assets')) assets.seed?.(data.get('assets'));
+  if (data.get('local')) assets.seedLocal?.(data.get('local'));
   await assets.ready(); ({ spec: sim, ds } = await loadBrowserSim());
   ({ unitInfo } = await import('/sim/snapshot.js'));
   raw = { ...ds.raw, bosses: data.get('bosses'), config: data.get('config'), backups: data.get('backups') };
