@@ -3,6 +3,7 @@ import { meleeOnHighGround } from '../../shared/highGround.js';
 import { createFieldView } from '../js/render/app.js';
 import { data } from '../js/data.js';
 import { assets } from '../js/assets.js';
+import { loadBrowserSim } from '../js/battle/runner.js';
 import { battleCatalog, defaultBattleConfig, enemyContext, createBattleScenario, setAutoAttack, isFrequencyTarget, testDamage, fillSp, addAmmo, healOperator, spawnExtraEnemy, clearEnemies } from './battle-scenario.js';
 
 const el = (id) => document.getElementById(id);
