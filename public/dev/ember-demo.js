@@ -12,7 +12,7 @@ const configIds = [
   'operator', 'enemy', 'skill', 'module', 'stage', 'row', 'col', 'dir',
   'start-row', 'start-col', 'end-row', 'end-col', 'checkpoints', 'seed', 'template-route',
   'potential', 'cultivate', 'extra-aspd', 'extra-atk', 'extra-ammo', 'full-sp', 'god-mode',
-  'bond', 'bond-count', 'bond-layers', 'enemy-count', 'dummy-mode', 'enemy-pacifist', 'enemy-def', 'enemy-res'
+  'bond', 'bond-count', 'bond-tier', 'bond-layers', 'enemy-count', 'dummy-mode', 'enemy-pacifist', 'enemy-def', 'enemy-res'
 ];
 const controlIds = [
   'pause', 'step', 'knockout', 'hit', 'damage-apply', 'withdraw', 'rebuild-view',
@@ -83,6 +83,18 @@ function updatePlacementInfo() {
     : '近战，须部署允许的地面格';
   el('loadout-info').textContent = `${r.profession ?? ''} / ${r.subProfessionName ?? ''} · ${placement}`;
 }
+function updateBondInfo() {
+  const bondId = el('bond').value;
+  if (!bondId || bondId === 'none') {
+    el('bond-info').textContent = '未选择盟约羁绊。选择后干员将自动获得该羁绊身份并激活羁绊加成。';
+    return;
+  }
+  const bondData = raw.bonds?.[bondId];
+  if (!bondData) return;
+  const th = bondData.thresholds ? `门槛: ${bondData.thresholds.join(' / ')} 人` : '';
+  const desc = bondData.effectDesc || bondData.desc || '';
+  el('bond-info').textContent = `【${bondData.name}】(${th})\n${desc}`;
+}
 function readConfig() {
   const templateRoute = el('template-route').checked;
   // Disabled custom route fields must not invalidate the selected official route.
@@ -104,6 +116,7 @@ function readConfig() {
     godMode: el('god-mode').checked,
     bondId: el('bond').value,
     bondCount: num('bond-count') || 0,
+    bondTier: el('bond-tier')?.value || 'auto',
     bondLayers: num('bond-layers') || 0,
     enemyCount: num('enemy-count') || 1,
     dummyMode: el('dummy-mode').checked,
@@ -140,7 +153,10 @@ function summarizeUnit(u, title) {
   const sk = u.skill, enemySkills = u.mem.ab?.list.filter((a) => a.cd != null).map((a) => `${Math.max(0, a.left).toFixed(1)}s`).join(' / ');
   const meter = u.mem.ab?.skillSp?.();
   const shieldHits = (u.mem.ab?.hitShield ?? 0) + (u.mem.ab?.frequencyShield?.() ?? 0) + u.buffs.reduce((n, b) => n + (b.shieldHits ?? 0), 0);
-  const sp = sk && !sk.noSkill ? `${sk.sp.toFixed(1)} / ${sk.spCost} · 充能 ${sk.charges} · ${sk.active ? '技能中' : '未开启'}`
+  const ammoStr = sk && (sk.kind === 'ammo' || (sk.ammoLeft || 0) > 0 || (sk.ammo || 0) > 0)
+    ? ` · 弹药 ${sk.ammoLeft || 0} / ${sk.ammoMax || sk.ammo || 0}`
+    : '';
+  const sp = sk && !sk.noSkill ? `${sk.sp.toFixed(1)} / ${sk.spCost} · 充能 ${sk.charges} · ${sk.active ? '技能中' : '未开启'}${ammoStr}`
     : meter ? `${meter.value.toFixed(1)} / ${Number.isFinite(meter.max) ? meter.max : '∞'}` : '无独立 SP 运行条';
   return `${title}：${u.name} (#${u.id})\n生命${u.s.flags.hitCount || u.s.flags.hitCountArts ? '次数' : ''}：${u.hp.toFixed(1)} / ${u.s.maxHp.toFixed(1)}${shieldHits > 0 ? ` · 频次护盾 ${shieldHits}` : ''}\nSP：${sp}${enemySkills ? ` · 敌人技能冷却 ${enemySkills}` : ''}\n位置：行 ${u.y.toFixed(2)}，列 ${u.x.toFixed(2)} · ${u.side === 'ally' ? u.dir : u.motion}\n阶段：${phase} · 状态：${flags}\n阻挡：${u.side === 'enemy' ? (u.blockedBy ? `${u.blockedBy.name} (#${u.blockedBy.id})` : '无') : u.blocking.map((e) => `${e.name} (#${e.id})`).join('、') || '无'}`;
 }
@@ -250,12 +266,22 @@ try {
   selectOptions('enemy', catalog.enemies, 'enemy_1288_duskls');
   selectOptions('stage', catalog.stages, 'act2autochess_m02');
   selectOptions('bond', [{ id: 'none', label: '无盟约羁绊' }, ...catalog.bonds], 'none');
-  loadouts(); setPlacementDefaults();
+  loadouts(); setPlacementDefaults(); updateBondInfo();
   view = await createFieldView(el('field'), { data, assets, settings: { quality: 'high', damageNumbers: true } });
   view.setBoardMode('2d'); debug.view = view; restart();
   for (const id of configIds) el(id).onchange = () => {
     if (id === 'operator') loadouts();
     if (id === 'module') updatePlacementInfo();
+    if (id === 'bond') {
+      const bondId = el('bond').value;
+      const bondData = raw.bonds?.[bondId];
+      if (bondData?.thresholds?.length) {
+        const maxTh = bondData.thresholds[bondData.thresholds.length - 1];
+        el('bond-count').value = maxTh;
+      }
+      updateBondInfo();
+    }
+    if (id === 'bond-count' || id === 'bond-tier' || id === 'bond-layers') updateBondInfo();
     if (id === 'enemy') {
       try {
         if (enemyContext(raw, el('enemy').value).terrain) el('stage').value = defaultBattleConfig(raw, { enemyKey: el('enemy').value }).stageId;

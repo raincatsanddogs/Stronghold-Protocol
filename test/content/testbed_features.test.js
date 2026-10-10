@@ -49,9 +49,10 @@ test('createBattleScenario applies custom ASPD, ATK, Full SP, and God Mode', () 
   assert.equal(op.skill.ammoLeft, op.skill.ammoMax, 'extra ammo applied');
 });
 
-test('createBattleScenario activates bonds like Laterano and Abyssal', () => {
+test('createBattleScenario activates bonds like Laterano and Abyssal even for non-native operators', () => {
   const scene = createBattleScenario(sim, ds, raw, {
-    ...defaultBattleConfig(raw, { chessId: 'chess_char_6_01_a' }),
+    ...defaultBattleConfig(raw, { chessId: 'diy:char_4231_clemnt:b' }),
+    chessId: 'diy:char_4231_clemnt:b',
     bondId: 'lateranoShip',
     bondCount: 6,
     bondLayers: 50,
@@ -60,6 +61,27 @@ test('createBattleScenario activates bonds like Laterano and Abyssal', () => {
   assert.ok(p.bonds.lateranoShip, 'laterano bond configured');
   assert.equal(p.bonds.lateranoShip.active, true);
   assert.equal(p.bonds.lateranoShip.layers, 50);
+  assert.ok(scene.operator.def?.bonds?.includes('lateranoShip'), 'operator dynamically acquired bond membership');
+});
+
+test('extra ammo is preserved and scaled by Laterano bond across skill activations', () => {
+  const scene = createBattleScenario(sim, ds, raw, {
+    ...defaultBattleConfig(raw, { chessId: 'chess_char_6_01_a' }),
+    chessId: 'chess_char_6_01_a',
+    skillIndex: 2,
+    extraAmmo: 50,
+    bondId: 'lateranoShip',
+    bondCount: 6,
+    bondLayers: 50,
+    fullSp: true,
+  });
+  const op = scene.operator;
+  assert.equal(op.skill.ammo, 55, 'base 5 + 50 extra ammo configured');
+  assert.equal(op.skill.ammoLeft, 55, 'initial ammoLeft reflects extra ammo');
+  // Activate skill: Laterano bond multiplier scales ammo
+  op.skill.activate();
+  assert.equal(op.skill.active, true, 'skill activated');
+  assert.equal(op.skill.ammoLeft, 99, 'ammoLeft scaled to 99 by Laterano bond');
 });
 
 test('createBattleScenario supports multiple enemies and dummy mode', () => {

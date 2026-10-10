@@ -63,9 +63,10 @@
         <label>盟约羁绊 <select id="bond"></select></label>
         <div class="row">
           <label>激活人数 <input id="bond-count" type="number" min="0" max="8" value="6"></label>
+          <label>激活阶段 <select id="bond-tier"><option value="auto" selected>自动 (按人数)</option><option value="1">1 阶</option><option value="2">2 阶</option><option value="3">3 阶</option></select></label>
           <label>盟约层数 <input id="bond-layers" type="number" min="0" max="999" value="0"></label>
         </div>
-        <small>选择拉特兰/阿戈尔等羁绊与层数，弹药干员（如蕾缪安）可立即获得大额弹药与增益效果。</small>
+        <small id="bond-info">选择拉特兰/阿戈尔等羁绊与层数，干员将自动获得该羁绊身份并激活羁绊加成。</small>
       </fieldset>
       <fieldset><legend>敌人与场景</legend>
         <label>搜索中文名或 ID<input id="enemy-search" type="search" placeholder="例如：逐火 / duskls"></label>

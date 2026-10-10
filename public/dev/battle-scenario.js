@@ -140,7 +140,9 @@ export function createBattleScenario(sim, ds, raw, config) {
   } else if (c.bondId && c.bondId !== 'none') {
     const bondData = raw.bonds?.[c.bondId];
     const bondCount = Number(c.bondCount) || bondData?.thresholds?.[0] || 3;
-    const bondTier = bondData?.thresholds ? Math.max(1, bondData.thresholds.filter((t) => t <= bondCount).length) : 1;
+    const bondTier = c.bondTier && c.bondTier !== 'auto'
+      ? Number(c.bondTier)
+      : (bondData?.thresholds ? Math.max(1, bondData.thresholds.filter((t) => t <= bondCount).length) : 1);
     bondsConfig[c.bondId] = {
       active: true,
       count: bondCount,
@@ -177,7 +179,21 @@ export function createBattleScenario(sim, ds, raw, config) {
       units: [unitEntry],
     }], spawns: spawnsList, routes,
   });
-  const battle = sim.createBattleFromSpec(spec, ds, { quiet: true });
+  // Ensure the operator also receives the selected bond so bond installers (Laterano, Abyssal, etc.) recognise them as members
+  const dsProxy = Object.create(ds);
+  dsProxy.getChess = (chessId, opts) => {
+    const original = ds.getChess(chessId, opts);
+    if (!original) return original;
+    if (c.bondId && c.bondId !== 'none') {
+      const bonds = [...(original.bonds || [])];
+      if (!bonds.includes(c.bondId)) bonds.push(c.bondId);
+      const rawBonds = [...(original.raw?.bonds || original.bonds || [])];
+      if (!rawBonds.includes(c.bondId)) rawBonds.push(c.bondId);
+      return { ...original, bonds, raw: { ...(original.raw || {}), bonds: rawBonds } };
+    }
+    return original;
+  };
+  const battle = sim.createBattleFromSpec(spec, dsProxy, { quiet: true });
   battle.autoFinish = false;
   const rangedPlacement = def.position === 'RANGED' || meleeOnHighGround(op);
   if (!battle.grid.canStand(c.row, c.col, { ranged: rangedPlacement })) throw new Error(`部署格 (${c.row},${c.col}) 不支持${def.position === 'RANGED' ? '远程' : '近战'}干员（地面/高台/不可部署限制）。`);
@@ -203,8 +219,10 @@ export function createBattleScenario(sim, ds, raw, config) {
     battle.addBuff(operator, { key: 'dev:godmode', persist: true, flags: { invulnerable: true } });
   }
   if (extraAmmo > 0 && operator.skill) {
-    operator.skill.ammoLeft = (operator.skill.ammoLeft || 0) + extraAmmo;
-    operator.skill.ammoMax = (operator.skill.ammoMax || 0) + extraAmmo;
+    operator.skill.ammo = (operator.skill.ammo || 0) + extraAmmo;
+    if (operator.skill.spec) operator.skill.spec.ammo = (operator.skill.spec.ammo || 0) + extraAmmo;
+    operator.skill.ammoLeft = operator.skill.ammo;
+    operator.skill.ammoMax = Math.max(operator.skill.ammoMax || 0, operator.skill.ammo);
   }
   if (c.dummyMode) {
     battle.on('damaged', (ctxDmg) => {
@@ -330,8 +348,10 @@ export function fillSp(scene) {
 export function addAmmo(scene, amount = 50) {
   const op = scene?.operator;
   if (op?.alive && op.skill) {
+    op.skill.ammo = (op.skill.ammo || 0) + amount;
+    if (op.skill.spec) op.skill.spec.ammo = (op.skill.spec.ammo || 0) + amount;
     op.skill.ammoLeft = (op.skill.ammoLeft || 0) + amount;
-    op.skill.ammoMax = (op.skill.ammoMax || 0) + amount;
+    if (op.skill.ammoLeft > (op.skill.ammoMax || 0)) op.skill.ammoMax = op.skill.ammoLeft;
     scene.battle.emit('ammoUsed', { unit: op, left: op.skill.ammoLeft, skill: op.skill });
     return true;
   }
