@@ -162,7 +162,7 @@ export async function createFieldView(host, options = {}) {
   signal?.throwIfAborted();
   const assets = resolveAssets(opts.assets);
   const data = makeData(opts.data);
-  const settings = { damageNumbers: true, quality: 'high', ...(opts.settings || {}) };
+  const settings = { damageNumbers: true, quality: 'high', bounceMode: false, ...(opts.settings || {}) };
   // the 3D board (three.js + the official art) loads in parallel with everything else
   const boardPref = boardPreference(opts.board);
   const want3d = boardPref !== '2d' && webgl2Available(boardPref === '3d');
@@ -1889,6 +1889,7 @@ export async function createFieldView(host, options = {}) {
       if (!s || typeof s !== 'object') return;
       const q = settings.quality;
       if (typeof s.damageNumbers === 'boolean') settings.damageNumbers = s.damageNumbers;
+      if (typeof s.bounceMode === 'boolean') settings.bounceMode = s.bounceMode;
       if (s.quality === 'high' || s.quality === 'medium' || s.quality === 'low') settings.quality = s.quality;
       if (q !== settings.quality) { board3d?.setQuality?.(settings.quality); resize(); }
     },

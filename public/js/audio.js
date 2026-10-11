@@ -538,6 +538,8 @@ export class AudioManager {
                                    // including the running skill's own `hits` — 赤刃明霄陈 S3's slash)
     this.consumed = new Set();     // summons used up by their own effect (香槟炸弹 exploded): no death sound
     this.installed = false;
+    this.bounceAudioActive = false;
+    this._bounceAudioEl = null;
     this._unlock = this._unlock.bind(this);
     this._onVis = this._onVis.bind(this);
   }
@@ -603,6 +605,9 @@ export class AudioManager {
         if (p && typeof p.then === 'function') p.then(() => { if (this.ctx?.state === 'running') this._dropUnlock(); }, () => {});
       }
       if (this.wantBgm) { const k = this.wantBgm; this.wantBgm = null; this.playBgm(k); }
+      if (this.bounceAudioActive && this._bounceAudioEl && this._bounceAudioEl.paused) {
+        this._bounceAudioEl.play().catch(() => {});
+      }
     } catch (err) {
       this._warn('ctx', err);
       this.ctx = null;
@@ -637,12 +642,17 @@ export class AudioManager {
 
   _onVis() {
     try {
-      if (!this.ctx) return;
-      if (this.win?.document?.hidden) this.ctx.suspend().catch(() => {});
-      else if (this.ctx.state !== 'running') {
-        // back on the page: resume, and keep a gesture ready in case the browser wants one first (iOS after a call)
-        this._armUnlock();
-        this.ctx.resume().then(() => { if (this.ctx?.state === 'running') this._dropUnlock(); }, () => {});
+      if (this.win?.document?.hidden) {
+        if (this._bounceAudioEl && this.bounceAudioActive) this._bounceAudioEl.pause();
+        if (this.ctx) this.ctx.suspend().catch(() => {});
+      } else {
+        if (this._bounceAudioEl && this.bounceAudioActive) this._bounceAudioEl.play().catch(() => {});
+        if (!this.ctx) return;
+        if (this.ctx.state !== 'running') {
+          // back on the page: resume, and keep a gesture ready in case the browser wants one first (iOS after a call)
+          this._armUnlock();
+          this.ctx.resume().then(() => { if (this.ctx?.state === 'running') this._dropUnlock(); }, () => {});
+        }
       }
     } catch { /* ignore */ }
   }
@@ -651,6 +661,33 @@ export class AudioManager {
     if (this.warned.has(key)) return;
     this.warned.add(key);
     try { console.warn(`[audio] ${key} unavailable`, err?.message || err || ''); } catch { /* ignore */ }
+  }
+
+  /**
+   * ⚡卫友的区⚡ (Why's this dealer) external track: plays the special NetEase audio when active,
+   * muting regular BGM; restores regular BGM when deactivated.
+   * @param {boolean} active
+   */
+  setBounceAudio(active) {
+    this.bounceAudioActive = !!active;
+    if (this.bounceAudioActive) {
+      if (!this._bounceAudioEl && typeof Audio !== 'undefined') {
+        try {
+          this._bounceAudioEl = new Audio('https://music.163.com/song/media/outer/url?id=3438848556.mp3');
+          this._bounceAudioEl.loop = true;
+        } catch { /* ignore */ }
+      }
+      if (this._bounceAudioEl) {
+        this._bounceAudioEl.volume = this.volumes.muted ? 0 : Math.max(0, Math.min(1, this.volumes.bgm));
+        this._bounceAudioEl.play().catch(() => {});
+      }
+    } else {
+      if (this._bounceAudioEl) {
+        this._bounceAudioEl.pause();
+        this._bounceAudioEl.currentTime = 0;
+      }
+    }
+    this._applyVolumes();
   }
 
   /**
@@ -679,12 +716,16 @@ export class AudioManager {
   }
 
   _applyVolumes() {
+    if (this._bounceAudioEl) {
+      this._bounceAudioEl.volume = this.volumes.muted ? 0 : Math.max(0, Math.min(1, this.volumes.bgm));
+    }
     if (!this.ctx) return;
     try {
       const t = this.ctx.currentTime;
       this.master.gain.setTargetAtTime(this.volumes.muted ? 0 : 1, t, 0.03);
-      // perceptual curve
-      this.bgmGain.gain.setTargetAtTime(this.volumes.bgm ** 2 * 0.55, t, 0.05);
+      // perceptual curve — regular BGM is silenced while bounce mode audio is active
+      const bgmTarget = this.bounceAudioActive ? 0 : (this.volumes.bgm ** 2 * 0.55);
+      this.bgmGain.gain.setTargetAtTime(bgmTarget, t, 0.05);
       this.sfxGain.gain.setTargetAtTime(this.volumes.sfx ** 2 * 0.9, t, 0.03);
       // no 0.9: a voice line is already mastered as loud as the rest of the official mix (settings 干员语音 tunes it)
       this.voiceGain.gain.setTargetAtTime(this.volumes.voice ** 2, t, 0.03);
@@ -1171,7 +1212,11 @@ export function installAudio(deps) {
   try {
     manifestGetter = typeof deps?.getManifest === 'function' ? deps.getManifest : manifestGetter;
     audio.install();
-    if (deps?.settings) { audio.setVolumes(deps.settings); audio.setVoiceLang(deps.settings.voiceLang, deps.settings.voiceOverrides); }
+    if (deps?.settings) {
+      audio.setVolumes(deps.settings);
+      audio.setVoiceLang(deps.settings.voiceLang, deps.settings.voiceOverrides);
+      audio.setBounceAudio(deps.settings.bounceMode);
+    }
     if (typeof deps?.subscribe === 'function' && typeof deps?.getState === 'function') {
       const sync = (s) => {
         try {

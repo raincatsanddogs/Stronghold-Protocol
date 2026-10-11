@@ -1193,15 +1193,50 @@ export class UnitView {
     if (this._cull(bx, by, s, dt)) return;
     const flip = (this.isEnemy ? (ENEMY_MODEL_FACES_LEFT ? -this.visFacing : this.visFacing) : this.visFacing) * (this.mirrorX ? -1 : 1);
 
+    // ⚡卫友的区⚡ (Why's this dealer) 135 BPM squash-and-stretch bounce
+    const bounceActive = this.ctx.settings?.bounceMode && this.alive && !this.down;
+    let bounceY = 0, bounceSx = 1, bounceSy = 1, bounceRot = 0, shadowK = 1, shadowAlphaK = 1;
+    if (bounceActive) {
+      // 135 BPM = 2.25 Hz; omega = 2 * PI * 2.25 ≈ 14.137167
+      const omega = 14.137167;
+      const theta = t * omega + (this.bob || 0) * 0.6;
+      const c = Math.cos(theta);
+      const sv = Math.sin(theta);
+      if (c > 0) {
+        // Ground impact & squash
+        const kSquash = c;
+        bounceSx = 1 + 0.22 * kSquash;
+        bounceSy = 1 - 0.22 * kSquash;
+        bounceY = 0;
+        shadowK = 1 + 0.15 * kSquash;
+      } else {
+        // Mid-air hop & stretch
+        const kHop = -c;
+        bounceSy = 1 + 0.18 * kHop;
+        bounceSx = 1 - 0.12 * kHop;
+        bounceY = -kHop * 0.18 * s;
+        shadowK = 1 - 0.22 * kHop;
+        shadowAlphaK = 1 - 0.3 * kHop;
+      }
+      bounceRot = sv * 0.05;
+      this.body.position.set(0, bounceY);
+      this.body.scale.set(bounceSx, bounceSy);
+      this.body.rotation = bounceRot;
+    } else if (this.body.position.y !== 0 || this.body.scale.x !== 1 || this.body.scale.y !== 1 || this.body.rotation !== 0) {
+      this.body.position.set(0, 0);
+      this.body.scale.set(1, 1);
+      this.body.rotation = 0;
+    }
+
     // shadow (on a raised top it is drawn with that block row, else in the shadow layer under everything); an enemy
     // flyer's lies on the tile under it while its body hovers from the road (shadowZ, GitHub #277)
     const shz = this.shadowZ ?? this.z;
     placeOnGround(this.ctx, this.shadow, this.ctx.layers.shadow, this.y, shz);
     const sh = cam.project(this.x, this.y, shz, SH_P);
     this.shadow.position.set(sh.x, sh.y);
-    const shw = s * (this.isBoss ? 1.6 : 0.95) / this.shadow.texture.width;
+    const shw = (s * (this.isBoss ? 1.6 : 0.95) / this.shadow.texture.width) * shadowK;
     this.shadow.scale.set(shw, shw * (this.shadow.texture === shadowTexture() ? 1 : 1.05));
-    this.shadow.alpha = 0.5 * alpha * (this.lift > 0 ? 0.6 : 1);
+    this.shadow.alpha = 0.5 * alpha * (this.lift > 0 ? 0.6 : 1) * shadowAlphaK;
 
     // model / fallback
     const spineShown = this.actor && this.spineReady;
@@ -1301,8 +1336,9 @@ export class UnitView {
     else if (this.isEnemy && this.isBoss) headTiles = 2.2;
     else if (this.isEnemy && spineShown) headTiles = clamp(UNIT.headroom * this.modelK * this.modelKY, 0.55, 2.2);
     this._headTiles = headTiles;
-    this.screen.top = by - headTiles * s;
-    this._updateHud(dt, s, bx, by - headTiles * s, alpha, t);
+    const hudY = by - headTiles * s * bounceSy + bounceY;
+    this.screen.top = hudY;
+    this._updateHud(dt, s, bx, hudY, alpha, t);
   }
 
   /**

@@ -1207,5 +1207,7 @@
   "请等待所有玩家连接后再发起投票": "Wait for all players to connect before starting a vote.",
   "同意重刷": "Agree to reroll",
   "拒绝重刷": "Reject reroll",
-  "取消投票": "Cancel vote"
+  "取消投票": "Cancel vote",
+  "⚡卫友的区⚡": "⚡Weiyou Zone⚡",
+  "开启角色、敌人与局内控件魔性弹跳及专属音乐。": "Enable bouncy squash-and-stretch animation for units, enemies, and UI controls with exclusive music."
 }

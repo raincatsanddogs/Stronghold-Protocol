@@ -44,16 +44,32 @@ export function applyTextSize(v) {
   if (el) el.dataset.text = TEXT_SIZES.includes(v) ? v : 'sm';
 }
 
+/**
+ * 设置 →「⚡卫友的区⚡」: toggle data-bounce on <html> for CSS bounce animations.
+ * @param {boolean} v
+ */
+export function applyBounceMode(v) {
+  const el = globalThis.document?.documentElement;
+  if (el) {
+    if (v) el.dataset.bounce = 'true';
+    else delete el.dataset.bounce;
+  }
+}
+
 settingsStore.subscribe((s) => {
   savePref('settings', sanitizeSettings(s));
   audio.setVolumes(s);
   audio.setVoiceLang(s.voiceLang, s.voiceOverrides);
+  audio.setBounceAudio(s.bounceMode);
   applyTextSize(s.textSize);
+  applyBounceMode(s.bounceMode);
 });
 audio.setVolumes(settingsStore.get());
 audio.setVoiceLang(settingsStore.get().voiceLang, settingsStore.get().voiceOverrides);
+audio.setBounceAudio(settingsStore.get().bounceMode);
 // before the first render (main.js boot renders after its imports ran): the stored step is on screen without a flash
 applyTextSize(settingsStore.get().textSize);
+applyBounceMode(settingsStore.get().bounceMode);
 
 /** @param {Partial<ReturnType<typeof sanitizeSettings>>} patch */
 export function updateSettings(patch) {
@@ -278,6 +294,8 @@ export function SettingsModal({ open, onClose }) {
         </div>
       </div>
       <p class="set-hint set-textsize-note">${t('调整界面文字大小，棋盘保持原比例。')}</p>
+      <${Toggle} label=${t('⚡卫友的区⚡')} micro="BOUNCE MODE" value=${s.bounceMode} onChange=${(v) => updateSettings({ bounceMode: v })} />
+      <p class="set-hint set-bounce-note">${t('开启角色、敌人与局内控件魔性弹跳及专属音乐。')}</p>
       <${HotkeySection} keys=${s.keys} touchUi=${touchUi} />
       <${DiagSection} />
       <p class="set-hint">${touchUi ? t('触屏操作：点击单位选中（撤退 / 出售）· 长按单位或卡牌查看详情 · 拖动部署后滑动选择朝向') : t('右键查看详情')}</p>

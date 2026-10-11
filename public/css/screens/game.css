@@ -713,3 +713,54 @@
 .pauseov__plate h2 { font-size: calc(.5 * var(--t)); font-weight: 900; letter-spacing: .3em; color: #fff; text-shadow: 0 0 .2rem rgba(0, 0, 0, .8); }
 .pauseov__note { font-size: calc(.17 * var(--t)); color: var(--text-md); text-shadow: 0 1px 2px #000; }
 .pauseov__btns { display: flex; gap: .2rem; }
+
+/* --------------------------------------------------------------------------------------------------------------------
+   ⚡卫友的区⚡ (Why's this dealer) 135 BPM squash-and-stretch bounce
+   135 BPM = 2.25 Hz; 1 cycle = ~0.444s (444ms)
+   -------------------------------------------------------------------------------------------------------------------- */
+@keyframes weiyou-bounce {
+  0%, 100% {
+    transform: translateY(0) scale(1.12, 0.88);
+  }
+  25% {
+    transform: translateY(-8px) scale(0.92, 1.08) rotate(-1.5deg);
+  }
+  50% {
+    transform: translateY(-12px) scale(0.96, 1.04) rotate(0deg);
+  }
+  75% {
+    transform: translateY(-4px) scale(0.94, 1.06) rotate(1.5deg);
+  }
+}
+
+:root[data-bounce="true"] .scard,
+:root[data-bounce="true"] .lvcard,
+:root[data-bounce="true"] .toolbtn,
+:root[data-bounce="true"] .readybtn,
+:root[data-bounce="true"] .funds__hex,
+:root[data-bounce="true"] .uframe__plate,
+:root[data-bounce="true"] .uframe__glyph,
+:root[data-bounce="true"] .dskill {
+  animation: weiyou-bounce 0.444s infinite cubic-bezier(0.25, 0.8, 0.4, 1);
+  transform-origin: center bottom;
+}
+
+/* Staggered phase offsets for delightful rhythmic variance */
+:root[data-bounce="true"] .scard:nth-child(1) { animation-delay: 0s; }
+:root[data-bounce="true"] .scard:nth-child(2) { animation-delay: -0.09s; }
+:root[data-bounce="true"] .scard:nth-child(3) { animation-delay: -0.18s; }
+:root[data-bounce="true"] .scard:nth-child(4) { animation-delay: -0.27s; }
+:root[data-bounce="true"] .scard:nth-child(5) { animation-delay: -0.36s; }
+
+:root[data-bounce="true"] .lvcard { animation-delay: -0.12s; }
+:root[data-bounce="true"] .toolbtn--ice { animation-delay: -0.22s; }
+:root[data-bounce="true"] .toolbtn--amber { animation-delay: -0.33s; }
+:root[data-bounce="true"] .readybtn { animation-delay: -0.15s; }
+:root[data-bounce="true"] .funds__hex { animation-delay: -0.05s; }
+:root[data-bounce="true"] .uframe__btn--retreat .uframe__plate,
+:root[data-bounce="true"] .uframe__btn--retreat .uframe__glyph { animation-delay: -0.08s; }
+:root[data-bounce="true"] .uframe__btn--sell .uframe__plate,
+:root[data-bounce="true"] .uframe__btn--sell .uframe__glyph,
+:root[data-bounce="true"] .uframe__btn--destroy .uframe__plate,
+:root[data-bounce="true"] .uframe__btn--destroy .uframe__glyph { animation-delay: -0.25s; }
+:root[data-bounce="true"] .dskill { animation-delay: -0.14s; }
