@@ -228,6 +228,38 @@ export const ALIAS_TINT = Object.freeze({ enemy_1305_mhslim: 0xffc48a, enemy_130
  * between `pulse` and 1 at `pulseHz` (real time).
  */
 export const EL_BAR = Object.freeze({ icon: 0.15, min: 8, max: 15, enemy: 0.8, gap: 1, pulse: 0.45, pulseHz: 1.5 });
+
+/** The share of a model's height a bar is placed above (the head is not the very top of the silhouette). */
+export const HEAD_TOP_K = 0.92;
+/** Enemies whose model is taller than this many tiles keep their bar at the cap — a bar must stay on screen. */
+export const HEAD_TILES_CAP = 2.2;
+export const HEAD_TILES_CAP_BOSS = 3.2;
+
+/**
+ * Tiles above the feet where a unit's HP bar / name tag sits.
+ *
+ * Operators and tokens are uniform chibis (UNIT.headroom). Enemies vary: with a known model they use **how far the model
+ * reaches above its own origin** (spine.js `top` = `bounds.y + bounds.height`, not the box's raw height — a body whose
+ * origin sits mid-model, 逐腐兽, would otherwise push its bar ~a tile too high), scaled by the official model factor and
+ * the vertical-stretch quirk; without bounds they fall back to the chibi headroom × that factor.
+ * @param {{ isEnemy:boolean, isBoss:boolean, spineShown:boolean, bounds?:{y?:number,height?:number}|null, modelK:number, modelKY:number }} o
+ * @returns {number} tiles
+ */
+export function headTilesForUnit(o) {
+  const k = (Number.isFinite(o.modelK) ? o.modelK : 1) * (Number.isFinite(o.modelKY) ? o.modelKY : 1);
+  if (!o.isEnemy) return UNIT.headroom;
+  const cap = o.isBoss ? HEAD_TILES_CAP_BOSS : HEAD_TILES_CAP;
+  const b = o.spineShown ? o.bounds : null;
+  if (b && Number.isFinite(b.height) && b.height > 20) {
+    // how far the box reaches *above the origin*: 猎狗pro −3.7, 大鲍勃 −2.6 (feet-anchored, ≈ height), 逐腐兽 −404.7 of
+    // 722.6 and 锏 −798 of 1183 (origin mid-body). Using the raw height there put the bar about a tile too high.
+    const top = Number.isFinite(b.y) ? b.y + b.height : b.height;
+    return clamp(Math.min(Math.max(top, 20), 900) * UNIT.modelScale * k * HEAD_TOP_K, 0.55, cap);
+  }
+  if (o.isBoss) return HEAD_TILES_CAP;
+  if (o.spineShown) return clamp(UNIT.headroom * k, 0.55, HEAD_TILES_CAP);
+  return UNIT.headroom;
+}
 /**
  * The HP-bar readouts under the bars (b.snap `ammo`, `wolves`, `neg`; render/interp.js header):
  *  - AMMO_BAR — the ammo skill's segmented bar replaces the SP bar: a cell per round, `height` of the HP bar's thickness
@@ -477,6 +509,8 @@ export class UnitView {
     this.sp = 0; this.spMax = 0;
     this.ammo = null;             // [rounds left, rounds in the magazine] while an ammo skill runs (sync; b.snap `ammo`)
     this.wolves = null;           // [狼影 left, the talent's maximum] of a 狼群 (sync; b.snap `wolves`)
+    this.coins = null;            // [balance, cap] of 琳琅诗怀雅's skill purse, including zero
+    this.coinHud = null;
     this.neg = 0;                 // the share of its cap a negative-HP pool holds, 0 = none (sync; b.snap `neg`, 斩业星熊's 我执)
     this.flags = 0; this.anim = ANIM.IDLE;
     this.statuses = new Set();
@@ -825,6 +859,7 @@ export class UnitView {
     this.hp = hp;
     this.sp = s.sp; this.spMax = s.spMax;
     this.ammo = s.ammo || null; this.wolves = s.wolves || null; this.neg = s.neg > 0 ? Math.min(1, s.neg) : 0;
+    this.coins = s.coins || null;
     const prevFlags = this.flags;
     this.flags = s.flags | 0;
     this.anim = s.anim | 0;
@@ -1193,32 +1228,22 @@ export class UnitView {
     if (this._cull(bx, by, s, dt)) return;
     const flip = (this.isEnemy ? (ENEMY_MODEL_FACES_LEFT ? -this.visFacing : this.visFacing) : this.visFacing) * (this.mirrorX ? -1 : 1);
 
-    // ⚡卫友的区⚡ (Why's this dealer) 135 BPM squash-and-stretch bounce
+    // ⚡卫友的区⚡ (Why's this dealer) 135 BPM squash-only bounce (rubber duck flattening)
     const bounceActive = this.ctx.settings?.bounceMode && this.alive && !this.down;
     let bounceY = 0, bounceSx = 1, bounceSy = 1, bounceRot = 0, shadowK = 1, shadowAlphaK = 1;
     if (bounceActive) {
       // 135 BPM = 2.25 Hz; omega = 2 * PI * 2.25 ≈ 14.137167
       const omega = 14.137167;
       const theta = t * omega + (this.bob || 0) * 0.6;
-      const c = Math.cos(theta);
       const sv = Math.sin(theta);
-      if (c > 0) {
-        // Ground impact & squash
-        const kSquash = c;
-        bounceSx = 1 + 0.22 * kSquash;
-        bounceSy = 1 - 0.22 * kSquash;
-        bounceY = 0;
-        shadowK = 1 + 0.15 * kSquash;
-      } else {
-        // Mid-air hop & stretch
-        const kHop = -c;
-        bounceSy = 1 + 0.18 * kHop;
-        bounceSx = 1 - 0.12 * kHop;
-        bounceY = -kHop * 0.18 * s;
-        shadowK = 1 - 0.22 * kHop;
-        shadowAlphaK = 1 - 0.3 * kHop;
-      }
-      bounceRot = sv * 0.05;
+      // 只弹不跳：像橡皮鸭被压扁（只向下压扁、向外横向展开，不向上跳起或腾空）
+      const kSquash = Math.pow(0.5 + 0.5 * Math.cos(theta), 1.4);
+      bounceSx = 1 + 0.25 * kSquash;
+      bounceSy = 1 - 0.25 * kSquash;
+      bounceY = 0;
+      shadowK = 1 + 0.16 * kSquash;
+      shadowAlphaK = 1;
+      bounceRot = sv * 0.03;
       this.body.position.set(0, bounceY);
       this.body.scale.set(bounceSx, bounceSy);
       this.body.rotation = bounceRot;
@@ -1329,13 +1354,14 @@ export class UnitView {
       this.aura.scale.set((s * 1.3) / 128, (s * 1.9) / 128);
     }
 
-    // head height: operators/tokens are uniform chibis; enemies vary (setup-pose bounds, when known; else the chibi
-    // headroom × their official model factor)
-    let headTiles = UNIT.headroom;
-    if (this.isEnemy && spineShown && this.actor.entry.bounds) headTiles = clamp(this.actor.height * UNIT.modelScale * this.modelK * this.modelKY * 0.92, 0.55, this.isBoss ? 3.2 : 2.2);
-    else if (this.isEnemy && this.isBoss) headTiles = 2.2;
-    else if (this.isEnemy && spineShown) headTiles = clamp(UNIT.headroom * this.modelK * this.modelKY, 0.55, 2.2);
-    this._headTiles = headTiles;
+    // keep the original short-circuit: many views never build an actor (prep chips, diamonds, tests), so the model
+    // only counts when a spine is actually shown
+    const actor = spineShown ? this.actor : null;
+    const headTiles = this._headTiles = headTilesForUnit({
+      isEnemy: this.isEnemy, isBoss: this.isBoss, spineShown,
+      bounds: actor && actor.entry ? actor.entry.bounds : null,
+      modelK: this.modelK, modelKY: this.modelKY,
+    });
     const hudY = by - headTiles * s * bounceSy + bounceY;
     this.screen.top = hudY;
     this._updateHud(dt, s, bx, hudY, alpha, t);
@@ -1448,7 +1474,8 @@ export class UnitView {
     // knocked-down operator (b.snap `down`)
     const rowsTop = cy + bh / 2 + (showSp ? spH + 1.5 : 0);
     const wolfH = this._updateWolfPips(showBars && !this.isEnemy && !!this.wolves, x0, rowsTop, s);
-    this._updateElementBar(showBars && !!this.el, x0, bw, rowsTop + wolfH + 1, spH, s, t);
+    const coinH = this._updateCoins(showBars && !this.isEnemy && !!this.coins, x0, rowsTop + wolfH, s);
+    this._updateElementBar(showBars && !!this.el, x0, bw, rowsTop + wolfH + coinH + 1, spH, s, t);
     this._updateDownRing(!prep && !!this.down && !this.alive, x, this.screen.y - DOWN_LOOK.height * s, s, t);
     // blocked marker at the feet (enemies held by a blocker)
     const blocked = !prep && this.alive && this.isEnemy && (this.flags & UF.BLOCKED);
@@ -1527,6 +1554,26 @@ export class UnitView {
     }
     r.root.visible = true;
     return d + 2 + WOLF_PIPS.pad;
+  }
+
+  /** Coin icon and balance/cap, read from the current snapshot rather than transient FX. */
+  _updateCoins(show, x, top, s) {
+    let r = this.coinHud;
+    if (!show) { if (r) r.root.visible = false; return 0; }
+    if (!r) {
+      const P = this.P, root = new P.Container(), icon = new P.Sprite(fxAtlas().tex.coin);
+      icon.width = icon.height = 16;
+      const text = new P.Text('', { fontFamily: 'Bender, Oxanium, sans-serif', fontSize: 16, fontWeight: '700', fill: '#ffd04a', stroke: '#0b0f0e', strokeThickness: 3 });
+      text.position.set(19, -2); root.addChild(icon, text); this.hud.addChild(root);
+      r = this.coinHud = { root, text, label: '' };
+    }
+    const label = `${this.coins[0]}/${this.coins[1]}`;
+    if (r.label !== label) { r.label = label; r.text.text = label; }
+    const size = clamp(s * 0.2, 10, 16);
+    r.root.scale.set(size / 16); r.root.position.set(x, top + 3); r.root.visible = true;
+    // Text includes font metrics and stroke beyond its nominal 16 px size; reserve the measured row so the next
+    // elemental gauge cannot overlap it (especially with a substituted browser font).
+    return Math.max(16, r.root.getLocalBounds?.().height || 24) * (size / 16) + 8;
   }
 
   /** True while the shown gauge is in its 爆发冷却 (b.snap `elem` carries the cooldown's end and length). */
