@@ -128,6 +128,7 @@ export function buildResult(m, outcome) {
         bossDamage: Math.round(ps.stats.bossDamage), activatedLayers: ps.activatedLayers(), lpLost: ps.stats.lpLost,
         perfectRounds: ps.stats.perfectRounds,
       },
+      damageStats: typeof ps.getUnitDamageStats === 'function' ? ps.getUnitDamageStats() : [],
       title: titles.get(ps.playerId) ?? null,
       trophies: trophiesFor(gd, roundsPassed, cleared && hiddenCleared),
       reward: rewardFor(gd, roundsPassed),

@@ -36,6 +36,7 @@ export function normalizeResult(res, pub) {
       lineup: (Array.isArray(p.lineup) ? p.lineup : Array.isArray(p.board) ? p.board : []).filter(isObj).slice(0, 12),
       bonds: (Array.isArray(p.bonds) ? p.bonds : Array.isArray(pp.bonds) ? pp.bonds : []).filter(isObj),
       stats: isObj(p.stats) ? p.stats : {},
+      damageStats: (Array.isArray(p.damageStats) ? p.damageStats : []).filter(isObj),
       trophies: Number.isFinite(p.trophies) ? p.trophies : 0,
       reward: Number.isFinite(p.reward) ? p.reward : 0,
       left: !!p.left,

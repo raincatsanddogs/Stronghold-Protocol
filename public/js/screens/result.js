@@ -15,7 +15,7 @@
 //                 stats: { dmgDealt, kills, leaks, gold /* funds SPENT */, refreshes, merges, bossDamage?, itemsEquipped?,
 //                          activatedLayers?, lpLost?, perfectRounds? } }] }
 
-import { useEffect } from '../../vendor/hooks.module.js';
+import { useEffect, useState, useMemo } from '../../vendor/hooks.module.js';
 import { html, Button, Icon, MicroLabel, DifficultyTag } from '../ui/components.js';
 import { useGameData, Img, UnitThumb, BandIcon, PlayerAvatar, BondGlyph, LpTower, Sprite } from '../ui/gameComponents.js';
 import { normalizeResult, fmtNum, diyRecordFor, cardStandIn, standInForText } from '../ui/gameLogic.js';
@@ -63,7 +63,7 @@ export function LineupThumb({ u, gd }) {
     title=${si ? t('{name}（{note}）', { name: si.name, note: standInForText(chess.name) }) : undefined} />`;
 }
 
-function PlayerCard({ p, myId, titles, best, solo = false }) {
+function PlayerCard({ p, myId, titles, best, solo = false, onShowDamage = null }) {
   const gd = useGameData();
   const titleRec = p.title ? titles.find((x) => x.id === p.title.id) || null : null;
   // (the server sends the title's Chinese name: the localized config.titles record when it is that record's)
@@ -97,10 +97,135 @@ function PlayerCard({ p, myId, titles, best, solo = false }) {
       </div>` : html`<span class="rcard__title rcard__title--none" aria-hidden="true"></span>`}
     </header>
     <div class="rcard__stats">
-      ${stats.map(([k, label]) => html`<div key=${k} class=${cx('rstat', best[k] === p.playerId && 'is-best')}><span>${t(label)}</span><b class="num">${fmtNum(p.stats[k])}</b></div>`)}
+      ${stats.map(([k, label]) => {
+        const isDmg = k === 'dmgDealt';
+        return html`<div key=${k} class=${cx('rstat', best[k] === p.playerId && 'is-best', isDmg && onShowDamage && 'is-clickable')}
+          onClick=${isDmg && onShowDamage ? () => onShowDamage(p.playerId) : null}
+          title=${isDmg && onShowDamage ? t('点击查看干员伤害排名') : undefined}>
+          <span>${t(label)}</span><b class="num">${fmtNum(p.stats[k])}</b>
+        </div>`;
+      })}
       ${Number.isFinite(p.lp) ? html`<div class="rstat" title=${p.lpShared && !solo ? t('最终攻势起全队共享目标生命值') : ''}><span>${p.lpShared && !solo ? t('同盟剩余生命') : t('剩余生命')}</span><${LpTower} value=${p.lp} size="sm" /></div>` : null}
     </div>
   </article>`;
+}
+
+/** Damage Ranking View for settlement screen: alliance overall or filtered per player */
+function DamageRankingView({ players = [], myId = null, filterId = 'all', onSelectFilter = null }) {
+  const gd = useGameData();
+
+  const rows = useMemo(() => {
+    let list = [];
+    if (filterId === 'all') {
+      for (const p of players) {
+        const stats = Array.isArray(p.damageStats) ? p.damageStats : [];
+        for (const item of stats) {
+          list.push({
+            ...item,
+            player: { id: p.playerId, name: p.name, isSelf: p.playerId === myId },
+          });
+        }
+      }
+    } else {
+      const p = players.find((x) => x.playerId === filterId);
+      const stats = Array.isArray(p?.damageStats) ? p.damageStats : [];
+      list = stats.map((item) => ({
+        ...item,
+        player: { id: p?.playerId, name: p?.name, isSelf: p?.playerId === myId },
+      }));
+    }
+
+    return list.sort((a, b) => (b.dmg || 0) - (a.dmg || 0) || (b.kills || 0) - (a.kills || 0) || (b.heal || 0) - (a.heal || 0) || String(a.name).localeCompare(String(b.name)));
+  }, [players, filterId, myId]);
+
+  const maxDmg = useMemo(() => Math.max(1, ...rows.map((r) => r.dmg || 0)), [rows]);
+  const totalDmg = useMemo(() => rows.reduce((acc, r) => acc + (r.dmg || 0), 0), [rows]);
+
+  return html`
+    <div class="rdmg">
+      <div class="rdmg__filters" role="tablist" aria-label=${t('伤害榜筛选')}>
+        <button type="button" class=${cx('rdmg__pill', filterId === 'all' && 'is-active')}
+          onClick=${() => onSelectFilter?.('all')}>
+          <span>${t('全体同盟')}</span>
+        </button>
+        ${players.map((p) => html`
+          <button key=${p.playerId} type="button" class=${cx('rdmg__pill', filterId === p.playerId && 'is-active')}
+            onClick=${() => onSelectFilter?.(p.playerId)}>
+            <span class="rdmg__pill-name">${p.name}</span>
+            ${p.playerId === myId ? html`<span class="rdmg__pill-you">${t('你')}</span>` : null}
+            ${p.isBot ? html`<span class="rdmg__pill-ai">AI</span>` : null}
+          </button>
+        `)}
+      </div>
+
+      ${rows.length === 0 ? html`
+        <div class="rdmg__empty">
+          <p>${t('暂无干员伤害数据')}</p>
+        </div>
+      ` : html`
+        <div class="rdmg__table">
+          <div class="rdmg__header">
+            <span class="rdmg__th rdmg__col-rank">#</span>
+            <span class="rdmg__th rdmg__col-unit">${t('干员 / 召唤物')}</span>
+            <span class="rdmg__th rdmg__col-dmg">${t('造成伤害 / 占比')}</span>
+            <span class="rdmg__th rdmg__col-stat">${t('击倒')}</span>
+            <span class="rdmg__th rdmg__col-stat">${t('治疗')}</span>
+            <span class="rdmg__th rdmg__col-stat">${t('承伤')}</span>
+          </div>
+
+          <div class="rdmg__list">
+            ${rows.map((u, i) => {
+              const chess = u.kind === 'token' ? null : gd.chess(u.id || u.baseId);
+              const dr = u.diy && chess ? diyRecordFor(chess, u.diy, { chess: data.get('chess'), backups: data.get('backups') }) : null;
+              const si = !dr && chess ? cardStandIn(chess, { unit: u, backups: gd.backups }) : null;
+              const pct = maxDmg > 0 ? ((u.dmg || 0) / maxDmg) * 100 : 0;
+              const share = totalDmg > 0 ? (((u.dmg || 0) / totalDmg) * 100).toFixed(1) : '0.0';
+              const rank = i + 1;
+
+              return html`
+                <div key=${`${u.player?.id || ''}:${u.kind}:${u.id || u.baseId}`} class=${cx('rdmg__row', rank <= 3 && `is-top-${rank}`)}>
+                  <div class="rdmg__col-rank">
+                    <span class=${cx('rdmg__rank-badge', rank <= 3 && `is-top-${rank}`)}>${rank}</span>
+                  </div>
+
+                  <div class="rdmg__col-unit">
+                    <${UnitThumb} kind=${u.kind === 'token' ? 'token' : 'chess'} id=${u.id || u.baseId}
+                      golden=${!!u.golden} tier=${u.tier} size="sm" rec=${dr || si}
+                      title=${si ? t('{name}（{note}）', { name: si.name, note: standInForText(chess?.name || '') }) : undefined} />
+                    <div class="rdmg__unit-meta">
+                      <span class="rdmg__unit-name">${u.name}</span>
+                      <div class="rdmg__unit-tags">
+                        ${u.kind === 'token' ? html`
+                          <span class="rdmg__tag rdmg__tag--token">${t('召唤物')} · ${u.ownerName || t('干员')}</span>
+                        ` : null}
+                        ${filterId === 'all' && players.length > 1 && u.player ? html`
+                          <span class=${cx('rdmg__tag rdmg__tag--player', u.player.isSelf && 'is-self')}>${u.player.name}</span>
+                        ` : null}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="rdmg__col-dmg">
+                    <div class="rdmg__dmg-vals">
+                      <b class="num rdmg__dmg-num">${fmtNum(u.dmg || 0)}</b>
+                      <span class="num rdmg__dmg-share">${share}%</span>
+                    </div>
+                    <div class="rdmg__bar-track">
+                      <div class="rdmg__bar-fill" style="width: ${pct.toFixed(1)}%"></div>
+                    </div>
+                  </div>
+
+                  <div class="rdmg__col-stat num">${u.kills ?? 0}</div>
+                  <div class="rdmg__col-stat num">${fmtNum(u.heal ?? 0)}</div>
+                  <div class="rdmg__col-stat num">${fmtNum(u.taken ?? 0)}</div>
+                </div>
+              `;
+            })}
+          </div>
+        </div>
+      `}
+    </div>
+  `;
 }
 
 /** RESULT screen of the match on screen: reads the store; 返回同盟 / 返回大厅 drops the match. */
@@ -121,6 +246,8 @@ export function ResultScreen() {
 export function ResultView({ res, pub = null, myId = null, backLabel, onBack, quiet = false }) {
   const gd = useGameData();
   const r = normalizeResult(res, pub);
+  const [viewMode, setViewMode] = useState('report'); // 'report' | 'damage'
+  const [damageFilterId, setDamageFilterId] = useState('all');
   const titles = Array.isArray(gd.config?.titles) ? gd.config.titles : [];
   const best = {};
   for (const [k] of STAT_ROWS) {
@@ -165,9 +292,28 @@ export function ResultView({ res, pub = null, myId = null, backLabel, onBack, qu
         </footer>
       </section>
       <section class="result__players">
-        <h2 class="brief-h"><span>${t('同盟成员')}</span><${MicroLabel}>ALLIANCE REPORT</${MicroLabel}></h2>
-        ${r.players.length ? r.players.map((p) => html`<${PlayerCard} key=${p.playerId} p=${p} myId=${myId} titles=${titles} best=${best} solo=${r.players.length < 2} />`)
-          : html`<p class="t-dim">${t('暂无结算数据')}</p>`}
+        <div class="result__nav">
+          <div class="result__tabs" role="tablist">
+            <button type="button" class=${cx('result__tab', viewMode === 'report' && 'is-active')}
+              onClick=${() => setViewMode('report')}>
+              <span>${t('同盟战报')}</span>
+              <${MicroLabel}>ALLIANCE REPORT</${MicroLabel}>
+            </button>
+            <button type="button" class=${cx('result__tab', viewMode === 'damage' && 'is-active')}
+              onClick=${() => setViewMode('damage')}>
+              <span>${t('伤害统计')}</span>
+              <${MicroLabel}>DAMAGE RANKINGS</${MicroLabel}>
+            </button>
+          </div>
+        </div>
+        ${viewMode === 'report' ? html`
+          <div class="result__cards">
+            ${r.players.length ? r.players.map((p) => html`<${PlayerCard} key=${p.playerId} p=${p} myId=${myId} titles=${titles} best=${best} solo=${r.players.length < 2} onShowDamage=${(pid) => { setDamageFilterId(pid); setViewMode('damage'); }} />`)
+              : html`<p class="t-dim">${t('暂无结算数据')}</p>`}
+          </div>
+        ` : html`
+          <${DamageRankingView} players=${r.players} myId=${myId} filterId=${damageFilterId} onSelectFilter=${setDamageFilterId} />
+        `}
       </section>
     </main>
   </div>`;

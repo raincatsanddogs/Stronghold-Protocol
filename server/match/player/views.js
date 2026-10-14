@@ -118,6 +118,7 @@ export class PlayerViews {
       stats: {
         dmgDealt: Math.round(this.stats.dmgDealt), kills: this.stats.kills, leaks: this.stats.leaks, gold: this.stats.gold,
         refreshes: this.stats.refreshes, merges: this.stats.merges,
+        unitDamage: this.getUnitDamageStats(),
       },
     };
   }

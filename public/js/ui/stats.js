@@ -162,6 +162,21 @@ function normalizePlayerRow(raw, quit = false) {
     lineup,
     bonds,
     stats: normalizeStatBlock(p.stats),
+    damageStats: (Array.isArray(p.damageStats) ? p.damageStats : []).filter(isObj).slice(0, 32).map((d) => ({
+      id: str(d.id),
+      baseId: str(d.baseId),
+      name: str(d.name, MAX_NAME) || '',
+      kind: d.kind === 'token' ? 'token' : 'op',
+      dmg: int(d.dmg, 0),
+      kills: int(d.kills, 0),
+      heal: int(d.heal, 0),
+      taken: int(d.taken, 0),
+      golden: bool(d.golden),
+      tier: num(d.tier),
+      ...(d.diy && isObj(d.diy) ? { diy: { charId: str(d.diy.charId), skillIndex: num(d.diy.skillIndex), uniEquipId: str(d.diy.uniEquipId) } } : null),
+      ...(str(d.standInFor) ? { standInFor: str(d.standInFor) } : null),
+      ...(str(d.ownerName) ? { ownerName: str(d.ownerName) } : null),
+    })).filter((d) => d.id),
   };
 }
 

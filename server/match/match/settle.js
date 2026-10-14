@@ -45,6 +45,7 @@ export class MatchSettle {
       ps.stats.kills += Number(r.killed) || 0;
       ps.stats.dmgDealt += Number(r.damageDealt) || 0;
       ps.stats.healing += Number(r.healingDone) || 0;
+      if (typeof ps.recordUnitStats === 'function' && r.unitStats) ps.recordUnitStats(r.unitStats);
       if (r.perfect !== false && counted === 0) ps.stats.perfectRounds++;
       // bounty coins (own battle + unite kills) are credited to the next prep
       let coins = Math.max(0, Math.trunc(Number(r.coins) || 0));
@@ -53,6 +54,7 @@ export class MatchSettle {
         coins += Math.max(0, Math.trunc(Number(up.coins) || 0));
         ps.stats.dmgDealt += Number(up.damageDealt) || 0;
         ps.stats.kills += Number(up.killed) || 0;
+        if (typeof ps.recordUnitStats === 'function' && up.unitStats) ps.recordUnitStats(up.unitStats);
       }
       // perfect-payout bounties (战术特训): own phase perfect
       for (const b of ps.bounties) if (b.card.payout === 'perfect' && counted === 0 && r.perfect !== false) coins += b.card.coin;

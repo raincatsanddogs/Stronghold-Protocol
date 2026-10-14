@@ -126,3 +126,65 @@ test('co-op trophies / victory follow each player\'s OWN rounds passed: a teamma
   assert.equal(res.victory, true, 'the team result is still a win');
   m.dispose();
 });
+
+test('unit damage statistics: promotion merge, summon attribution, ranking and result normalization', async () => {
+  const { buildResult } = await import('../../server/match/results.js');
+  const { normalizeResult } = await import('../../public/js/ui/gameLogic/result.js');
+  const h = makeMatch({ mode: 'coop', difficulty: 'HARD', humans: 2, seed: 10, fake: true }).start();
+  const ps = h.ps('p_0');
+
+  // Round 1: ordinary SilverAsh (char_002_silverash_a) and Kal'tsit + Mon3tr
+  ps.recordUnitStats([
+    { defId: 'char_002_silverash_a', name: '银灰', kind: 'op', dmg: 1000, kills: 2, heal: 0, taken: 200 },
+    { defId: 'char_003_kalts_a', name: '凯尔希', kind: 'op', dmg: 200, kills: 0, heal: 800, taken: 100 },
+    { defId: 'token_10001_mon3tr', name: 'Mon3tr', kind: 'token', dmg: 3500, kills: 5, heal: 0, taken: 1500, ownerUnitId: 'char_003_kalts_a', ownerName: '凯尔希' },
+  ]);
+
+  // Check round 1 stats
+  let stats = ps.getUnitDamageStats();
+  assert.equal(stats.length, 3);
+  assert.equal(stats[0].name, 'Mon3tr');
+  assert.equal(stats[0].dmg, 3500);
+  assert.equal(stats[0].kind, 'token');
+  assert.equal(stats[0].ownerName, '凯尔希');
+
+  // Round 2: SilverAsh is promoted to Elite (char_002_silverash_b)
+  ps.recordUnitStats([
+    { defId: 'char_002_silverash_b', name: '银灰', kind: 'op', dmg: 4000, kills: 8, heal: 0, taken: 500 },
+    { defId: 'char_003_kalts_a', name: '凯尔希', kind: 'op', dmg: 300, kills: 1, heal: 1200, taken: 200 },
+    { defId: 'token_10001_mon3tr', name: 'Mon3tr', kind: 'token', dmg: 2000, kills: 3, heal: 0, taken: 1000, ownerUnitId: 'char_003_kalts_a', ownerName: '凯尔希' },
+  ]);
+
+  // Check round 2 accumulated stats: SilverAsh is merged into one elite record
+  stats = ps.getUnitDamageStats();
+  assert.equal(stats.length, 3);
+  // Ranked by damage: Mon3tr (5500) > SilverAsh (5000) > Kal'tsit (500)
+  assert.equal(stats[0].name, 'Mon3tr');
+  assert.equal(stats[0].dmg, 5500);
+  assert.equal(stats[0].kills, 8);
+
+  assert.equal(stats[1].name, '银灰');
+  assert.equal(stats[1].dmg, 5000);
+  assert.equal(stats[1].kills, 10);
+  assert.equal(stats[1].golden, true, 'promoted unit has golden=true');
+  assert.equal(stats[1].id, 'char_002_silverash_b', 'promoted unit uses elite defId');
+
+  assert.equal(stats[2].name, '凯尔希');
+  assert.equal(stats[2].heal, 2000);
+
+  // Build match result and check client normalization
+  const res = buildResult(h.m, { victory: true, reason: 'victory' });
+  const p0Res = res.players.find((p) => p.playerId === 'p_0');
+  assert.ok(Array.isArray(p0Res.damageStats));
+  assert.equal(p0Res.damageStats.length, 3);
+  assert.equal(p0Res.damageStats[0].name, 'Mon3tr');
+
+  // Client normalizer
+  const norm = normalizeResult(res, h.m.publicView());
+  const normP0 = norm.players.find((p) => p.playerId === 'p_0');
+  assert.ok(Array.isArray(normP0.damageStats));
+  assert.equal(normP0.damageStats[0].name, 'Mon3tr');
+  assert.equal(normP0.damageStats[1].golden, true);
+
+  h.m.dispose();
+});

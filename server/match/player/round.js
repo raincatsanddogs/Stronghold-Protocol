@@ -145,4 +145,128 @@ export class PlayerRound {
       deviceOverrides: { ...this.deviceOverrides },
     };
   }
+
+  /**
+   * Accumulate combat statistics (damage, kills, heal, taken) per operator / summon.
+   * Operators are aggregated under their baseChessId so elite promotion merges their stats.
+   * @param {Array<object>} unitStats
+   */
+  recordUnitStats(unitStats) {
+    if (!Array.isArray(unitStats) || !this.unitDamageStats) return;
+    for (const u of unitStats) {
+      if (!u || (!u.defId && !u.id)) continue;
+      const kind = u.kind === 'token' ? 'token' : 'op';
+      const defId = String(u.defId || u.id || '');
+      const isGolden = defId.endsWith('_b') || !!u.golden || (this.gd && typeof this.gd.isGolden === 'function' && this.gd.isGolden(defId));
+      const baseId = kind === 'op' ? defId.replace(/_b$/, '_a') : defId;
+      const key = `${kind}:${baseId}`;
+
+      let stat = this.unitDamageStats.get(key);
+      if (!stat) {
+        stat = {
+          id: defId,
+          baseId,
+          name: u.name || defId,
+          kind,
+          dmg: 0,
+          kills: 0,
+          heal: 0,
+          taken: 0,
+          golden: isGolden,
+          tier: u.tier ?? (kind === 'op' && this.gd && typeof this.gd.tierOf === 'function' ? this.gd.tierOf(baseId) : undefined),
+        };
+        if (kind === 'op') {
+          const pick = typeof this.diyPickOf === 'function' ? this.diyPickOf(baseId) : null;
+          if (pick) stat.diy = { charId: pick.charId, skillIndex: pick.skillIndex, uniEquipId: pick.uniEquipId };
+          if (typeof this.fieldsStandIn === 'function' && this.fieldsStandIn(baseId)) {
+            const si = this.gd && typeof this.gd.standIn === 'function' ? this.gd.standIn(baseId) : null;
+            if (si && si.standInFor) stat.standInFor = si.standInFor;
+          }
+        } else if (kind === 'token') {
+          if (u.ownerName) stat.ownerName = u.ownerName;
+          else if (this.gd && typeof this.gd.token === 'function') {
+            const tkRec = this.gd.token(defId);
+            if (tkRec && Array.isArray(tkRec.owners) && tkRec.owners.length) {
+              const opRec = typeof this.gd.chess === 'function' ? this.gd.chess(tkRec.owners[0]) : null;
+              if (opRec && opRec.name) stat.ownerName = opRec.name;
+            }
+          }
+        }
+        this.unitDamageStats.set(key, stat);
+      }
+
+      stat.dmg += Math.max(0, Number(u.dmg) || 0);
+      stat.kills += Math.max(0, Math.trunc(Number(u.kills) || 0));
+      stat.heal += Math.max(0, Number(u.heal) || 0);
+      stat.taken += Math.max(0, Number(u.taken) || 0);
+
+      if (isGolden) {
+        stat.golden = true;
+        stat.id = defId;
+      }
+      if (u.name && (!stat.name || stat.name === defId)) {
+        stat.name = u.name;
+      }
+    }
+  }
+
+  /**
+   * Return the sorted array of damage statistics for all operators and active summons.
+   * Ensures all currently fielded board operators are present even if 0 damage was dealt.
+   * @returns {Array<object>}
+   */
+  getUnitDamageStats() {
+    if (!this.unitDamageStats) return [];
+    if (this.board) {
+      for (const p of this.board.values()) {
+        if (p && p.kind === 'chess') {
+          const defId = p.id;
+          const isGolden = this.gd && typeof this.gd.isGolden === 'function' ? this.gd.isGolden(defId) : defId.endsWith('_b');
+          const baseId = defId.replace(/_b$/, '_a');
+          const key = `op:${baseId}`;
+          let stat = this.unitDamageStats.get(key);
+          if (!stat) {
+            const c = this.gd && typeof this.gd.chess === 'function' ? this.gd.chess(defId) : null;
+            stat = {
+              id: defId,
+              baseId,
+              name: c?.name || defId,
+              kind: 'op',
+              dmg: 0,
+              kills: 0,
+              heal: 0,
+              taken: 0,
+              golden: isGolden,
+              tier: this.gd && typeof this.gd.tierOf === 'function' ? this.gd.tierOf(baseId) : undefined,
+            };
+            const pick = typeof this.diyPickOf === 'function' ? this.diyPickOf(baseId) : null;
+            if (pick) stat.diy = { charId: pick.charId, skillIndex: pick.skillIndex, uniEquipId: pick.uniEquipId };
+            if (typeof this.fieldsStandIn === 'function' && this.fieldsStandIn(baseId)) {
+              const si = this.gd && typeof this.gd.standIn === 'function' ? this.gd.standIn(baseId) : null;
+              if (si && si.standInFor) stat.standInFor = si.standInFor;
+            }
+            this.unitDamageStats.set(key, stat);
+          } else if (isGolden) {
+            stat.golden = true;
+            stat.id = defId;
+          }
+        }
+      }
+    }
+
+    const list = [];
+    for (const stat of this.unitDamageStats.values()) {
+      if (stat.kind === 'token' && stat.dmg <= 0 && stat.heal <= 0 && stat.taken <= 0) continue;
+      list.push({
+        ...stat,
+        dmg: Math.round(stat.dmg),
+        heal: Math.round(stat.heal),
+        taken: Math.round(stat.taken),
+      });
+    }
+
+    list.sort((a, b) => b.dmg - a.dmg || b.kills - a.kills || b.heal - a.heal || String(a.name).localeCompare(String(b.name)));
+    return list;
+  }
 }
+

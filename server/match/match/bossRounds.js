@@ -524,6 +524,7 @@ export class MatchBoss {
         if (pp && ps) {
           ps.stats.dmgDealt += Number(pp.damageDealt) || 0;
           ps.stats.kills += Number(pp.killed) || 0;
+          if (typeof ps.recordUnitStats === 'function' && pp.unitStats) ps.recordUnitStats(pp.unitStats);
           ps.dirty(); // m.private.stats
           this._charDamageTickers(ps, pp);
         }

@@ -208,6 +208,7 @@ export function createBattleRunner(deps) {
   /** @type {Map<string, any>} battleId → entry of a b.start still being prepared (prepare(); `battle` null until built) */
   const pending = new Map();
   let cur = null;              // entry on screen
+  let lastDamageStats = [];    // last finished battle damage stats for display in prep/settle
   let simP = null;
   let startSeq = 0;            // counts the b.starts: the latest one is the view asked for
   let loading = null;          // the pending entry of the latest b.start (shown when prepared)
@@ -887,6 +888,83 @@ export function createBattleRunner(deps) {
           const diy = u.def?.diyFor ? u.def.loadout?.diy : null;
           return { ...o, ...(si ? { standInFor: si } : {}), ...(diy ? { diy: { ...diy } } : {}) };
         });
+    },
+    /**
+     * Real-time damage statistics of ally units in the battle on screen (sorted descending by damage).
+     * @param {string|null} [fieldId]
+     * @param {string|null} [ownerId]
+     * @returns {Array<object>}
+     */
+    liveDamageStats(fieldId = null, ownerId = null) {
+      const e = cur;
+      if (!e || !e.battle || (fieldId != null && e.fieldId !== fieldId)) return lastDamageStats || [];
+      const list = Array.isArray(e.battle.allyUnits) ? e.battle.allyUnits : [];
+      const map = new Map();
+      const time = Math.max(0.1, Number(e.battle.time) || 0.1);
+
+      for (const u of list) {
+        if (!u || (!u.defId && !u.id)) continue;
+        if (ownerId && u.ownerId && u.ownerId !== ownerId) continue;
+        const kind = u.kind === 'token' ? 'token' : 'op';
+        const defId = String(u.defId || u.id || '');
+        const isGolden = defId.endsWith('_b') || !!(u.def && u.def.golden) || !!u.golden;
+        const baseId = kind === 'op' ? defId.replace(/_b$/, '_a') : defId;
+        const key = `${kind}:${baseId}`;
+
+        let stat = map.get(key);
+        if (!stat) {
+          const si = u.def && typeof u.def.standInFor === 'string' ? u.def.standInFor : null;
+          const diy = u.def?.diyFor ? u.def.loadout?.diy : null;
+          stat = {
+            id: defId,
+            baseId,
+            name: u.name || defId,
+            kind,
+            dmg: 0,
+            kills: 0,
+            heal: 0,
+            taken: 0,
+            golden: isGolden,
+            tier: u.def?.tier,
+            ownerId: u.ownerId,
+            ...(si ? { standInFor: si } : {}),
+            ...(diy ? { diy: { ...diy } } : {}),
+            ownerName: u.ownerUnit?.name || null,
+          };
+          map.set(key, stat);
+        }
+
+        const dmg = Math.max(0, u.stats?.dmg || 0);
+        const kills = Math.max(0, u.stats?.kills || 0);
+        const heal = Math.max(0, u.stats?.heal || 0);
+        const taken = Math.max(0, u.stats?.taken || 0);
+
+        stat.dmg += dmg;
+        stat.kills += kills;
+        stat.heal += heal;
+        stat.taken += taken;
+
+        if (isGolden) {
+          stat.golden = true;
+          stat.id = defId;
+        }
+      }
+
+      const rows = [...map.values()]
+        .filter((u) => u.kind === 'op' || u.dmg > 0 || u.heal > 0 || u.taken > 0)
+        .map((u) => ({
+          ...u,
+          dmg: Math.round(u.dmg),
+          dps: Math.round(u.dmg / time),
+          heal: Math.round(u.heal),
+          taken: Math.round(u.taken),
+        }))
+        .sort((a, b) => b.dmg - a.dmg || b.kills - a.kills || b.heal - a.heal || String(a.name).localeCompare(String(b.name)));
+
+      if (rows.length) {
+        lastDamageStats = rows;
+      }
+      return rows;
     },
     /** Re-show the current battle (the game screen remounted). */
     reshow() { if (cur) show(cur); },
