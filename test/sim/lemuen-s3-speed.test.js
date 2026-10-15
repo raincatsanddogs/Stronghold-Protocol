@@ -86,5 +86,6 @@ test('Lemuen S3 with >100 ammo locks one-by-one by interval and bombards with 33
   h.run(12);
   const fxShells = h.eventsOf('fx').filter((e) => e[1] === 'bombardShell');
   assert.equal(fxShells.length, 33, 'at most 33 shells were fired (capped at 33)');
+  assert.ok(shellsCount > 0, 'bombardment dealt damage');
   checkInvariants(h.b);
 });
