@@ -51,7 +51,7 @@ test('Lemuen S3 lock speed scales with ASPD and consumes ammo fast', () => {
   assert.ok(dur200 <= 1.15 && dur200 >= 0.9, `duration at 200 ASPD should be ~1.0s, was ${dur200}s`);
 });
 
-test('Lemuen S3 with >100 ammo locks one-by-one by interval and fires all shells without 33-cap truncation', () => {
+test('Lemuen S3 with >100 ammo locks one-by-one by interval and bombards with 33-cap truncation', () => {
   let shellsCount = 0;
   const h = makeBattle({
     defs: DEFS, seed: 7, timeLimit: 200,
@@ -82,9 +82,9 @@ test('Lemuen S3 with >100 ammo locks one-by-one by interval and fires all shells
   // 120 ammo locks one-by-one without batching: 1st lock at 0s, 119 intervals * 0.5s = 59.5s
   assert.ok(lockTime >= 59 && lockTime <= 61, `120 ammo locked one-by-one took ${lockTime}s`);
 
-  // Wait for bombardment
+  // Wait for bombardment (33 shells * 0.3s = 9.6s + 0.3s flight = 9.9s)
   h.run(12);
   const fxShells = h.eventsOf('fx').filter((e) => e[1] === 'bombardShell');
-  assert.equal(fxShells.length, 120, 'all 120 shells were fired (not truncated to 33)');
+  assert.equal(fxShells.length, 33, 'at most 33 shells were fired (capped at 33)');
   checkInvariants(h.b);
 });

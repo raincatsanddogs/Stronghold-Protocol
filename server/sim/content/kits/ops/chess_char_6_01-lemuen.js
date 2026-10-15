@@ -95,7 +95,7 @@ function lemuen(bb, chess, def) {
   // emit_offset 0.2) around its lock mark — the locked enemy while it is on the field ("持续追踪锁定目标"), else the spot
   // it left ("锁定标记会留在原地") — landing LEMUEN_SHELL_FLIGHT s later; each shell hits every enemy within dist_2 once
   // (limited_hit_time 1): proj_atk_scale_1 × ATK within dist_1 of its point, proj_atk_scale_2 × ATK beyond, all with the
-  // ATK cached when the skill ended ("缓存攻击力"); all locked shells fire within LEMUEN_SHELL_WINDOW s.
+  // ATK cached when the skill ended ("缓存攻击力"); at most LEMUEN_SHELL_WINDOW s of shells ("最多产生33次轰炸").
   const spread = Math.max(0, num(bb['attack@emit_offset'], 0.2));
   const markOf = (L) => {
     const e = L.e;
@@ -117,8 +117,7 @@ function lemuen(bb, chess, def) {
   const bombard = (battle, unit, locks) => {
     const atk = unit.s.atk;
     const seq = unit.deploySeq;
-    const n = locks.length;
-    const shellInterval = n > 0 ? Math.min(LEMUEN_SHELL_INTERVAL, LEMUEN_SHELL_WINDOW / n) : LEMUEN_SHELL_INTERVAL;
+    const n = Math.min(locks.length, Math.floor(LEMUEN_SHELL_WINDOW / LEMUEN_SHELL_INTERVAL + 1e-9));
     const fire = (i) => {
       // knocked out / withdrawn after the skill ended: the shells not fired yet are dropped (those in the air land)
       if (!(unit.alive && unit.deployed && unit.deploySeq === seq)) return;
@@ -128,7 +127,7 @@ function lemuen(bb, chess, def) {
       const x = L.x + ox, y = L.y + oy;
       battle.fx('bombardShell', { x, y, id: unit.id, r: d2, t: LEMUEN_SHELL_FLIGHT, i });
       battle.after(LEMUEN_SHELL_FLIGHT, () => blast(battle, unit, atk, x, y), { owner: unit });
-      if (i + 1 < n) battle.after(shellInterval, () => fire(i + 1), { owner: unit });
+      if (i + 1 < n) battle.after(LEMUEN_SHELL_INTERVAL, () => fire(i + 1), { owner: unit });
     };
     if (n > 0) fire(0);
   };
