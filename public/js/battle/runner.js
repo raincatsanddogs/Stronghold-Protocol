@@ -897,7 +897,10 @@ export function createBattleRunner(deps) {
      */
     liveDamageStats(fieldId = null, ownerId = null) {
       const e = cur;
-      if (!e || !e.battle || (fieldId != null && e.fieldId !== fieldId)) return lastDamageStats || [];
+      if (!e || !e.battle) return lastDamageStats || [];
+      if (fieldId != null && e.fieldId !== fieldId && e.battleId !== fieldId) {
+        if (lastDamageStats && lastDamageStats.length) return lastDamageStats;
+      }
       const list = Array.isArray(e.battle.allyUnits) ? e.battle.allyUnits : [];
       const map = new Map();
       const time = Math.max(0.1, Number(e.battle.time) || 0.1);

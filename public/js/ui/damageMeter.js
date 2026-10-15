@@ -58,22 +58,22 @@ export function DamageMeter({ pub, priv, myId, watching = null, combat = true })
   const gd = useGameData();
   const [collapsed, setCollapsed] = useState(false);
   const [tab, setTab] = useState('round'); // 'round' | 'total'
-  const [, setTick] = useState(0);
+  const [tick, setTick] = useState(0);
 
-  // Poll live stats while battle is simulating
+  // Poll live stats while battle is simulating (every 250ms)
   useEffect(() => {
-    if (!combat || collapsed) return;
+    if (!combat) return;
     const timer = setInterval(() => {
-      setTick((t) => (t + 1) % 100000);
+      setTick((t) => (t + 1) % 1000000);
     }, 250);
     return () => clearInterval(timer);
-  }, [combat, collapsed]);
+  }, [combat]);
 
-  // Round stats from runner
+  // Round stats from runner: updates continuously on every tick during battle
   const roundStats = useMemo(() => {
     if (!battleRunner) return [];
     return battleRunner.liveDamageStats(watching || null, null);
-  }, [watching, combat, collapsed]);
+  }, [tick, watching, combat]);
 
   // Total stats combining server accumulator + current live round
   const totalStats = useMemo(() => {
