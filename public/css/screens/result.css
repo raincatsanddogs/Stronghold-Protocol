@@ -173,3 +173,6 @@
 .rdmg__row.is-top-1 .rdmg__bar-fill { background: linear-gradient(90deg, #b8860b, var(--gold)); }
 
 .rdmg__empty { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: .6rem 0; gap: .06rem; color: var(--text-dim); font-size: calc(.18 * var(--t)); }
+
+/* a match with gameplay plugins (DESIGN §32.6): the unofficial mark under the headline */
+.result__modmark { align-self: flex-start; margin-top: .06rem; }

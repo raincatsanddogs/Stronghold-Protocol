@@ -3,7 +3,7 @@
 
 import { sortEnemyTargets, canTargetEnemy } from '../../../targeting.js';
 import { rotateOffset } from '../../../dir.js';
-import { bodyDist, bodyInKeys, bodyKeys } from '../../../body.js';
+import { bodyDist, bodyKeys, bodyInRange } from '../../../body.js';
 import { num, tbb, live, isElite, hasBond, ANY, bstate } from '../shared/tier6.js';
 
 // ------------------------------------------------------------------------------------------------------------------
@@ -50,7 +50,7 @@ function ensureWanted(battle) {
       for (const e of battle.enemies) {
         if (!e.alive || state.marks.has(e) || !isElite(e)) continue;
         // PRTS: starting the timer needs selectability; once attached, only its continuous stay is tested.
-        if (e.hidden || !lat.some((a) => a.rangeKeySet && bodyInKeys(e, a.rangeKeySet))) { state.time.delete(e); continue; }
+        if (e.hidden || !lat.some((a) => a.rangeKeySet && bodyInRange(e, a.rangeKeySet))) { state.time.delete(e); continue; }
         if (!state.time.has(e) && !canTargetEnemy(u, e, ANY)) continue;
         const t = (state.time.get(e) ?? 0) + 0.25;
         state.time.set(e, t);
@@ -72,8 +72,7 @@ function ensureWanted(battle) {
 
 function lemuen(bb, chess, def) {
   const t0 = tbb(def, 0), t1 = tbb(def, 1), tb = def?.traitBb || {};
-  const baseAim = Math.max(0.05, num(bb['attack@aim_interval'], 0.5));
-  const calcAimInterval = (unit) => Math.max(0.033, baseAim * 100 / Math.max(20, unit.s.aspd));
+  const aim = Math.max(0.05, num(bb['attack@aim_interval'], 0.5));
   const d1 = num(bb['attack@dist_1'], 0.8);
   const d2 = num(bb['attack@dist_2'], num(bb['attack@projectile_range'], 1.5));
   const s1 = num(bb['attack@proj_atk_scale_1'], 1), s2 = num(bb['attack@proj_atk_scale_2'], 1);
@@ -104,7 +103,7 @@ function lemuen(bb, chess, def) {
   };
   const blast = (battle, unit, atk, x, y) => {
     battle.fx('bombard', { x, y, id: unit.id, r: d2 });
-    for (const e of battle.foesInRadius(x, y, d2)) {
+    for (const e of battle.foesInColliderRadius(x, y, d2)) {
       if (e.s.flags.untargetable) continue;
       const d = bodyDist(e, x, y);
       battle.dealDamage(unit, e, { amount: atk * (d <= d1 + 1e-9 ? s1 : s2), type: 'phys', isSkill: true, isSplash: true, tags: ['skill', 'bombard'] });
@@ -193,18 +192,17 @@ function lemuen(bb, chess, def) {
       ammo: Math.max(1, Math.floor(num(bb['attack@trigger_time'], 5))),
       attack: { noAttack: true },
       allyTargets: true,   // its locks take 白铁's 铁钳号 too (pickLock) — skills.js allyTargetsOk
-      onStart({ unit }) { unit.mem.lemLocks = []; unit.mem.lemAcc = calcAimInterval(unit); },
+      onStart({ unit }) { unit.mem.lemLocks = []; unit.mem.lemAcc = aim; },
       onTick({ battle, unit, skill, dt }) {
         const m = unit.mem;
         if (!m.lemLocks) return;
         for (const L of m.lemLocks) markOf(L);
         if (!unit.canAct) return;
         m.lemAcc += dt;
-        const aimInterval = calcAimInterval(unit);
-        if (m.lemAcc + 1e-9 < aimInterval) return;
+        if (m.lemAcc + 1e-9 < aim) return;
         const e = pickLock(battle, unit, m.lemLocks);
-        if (!e) { m.lemAcc = aimInterval; return; } // nothing to lock: wait, ready immediately when enemy arrives
-        m.lemAcc = Math.max(0, m.lemAcc - aimInterval);
+        if (!e) { m.lemAcc = aim; return; }   // nothing to lock: wait, the next lock ready the moment an enemy comes
+        m.lemAcc -= aim;
         m.lemLocks.push({ e, x: e.x, y: e.y });
         battle.fx('lock', { x: e.x, y: e.y, id: e.id, src: unit.id, hold: 1 });
         skill.ammoLeft--;
