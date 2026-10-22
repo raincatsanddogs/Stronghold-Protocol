@@ -1,0 +1,25 @@
+{
+  "lock": 1,
+  "id": "lemuen-tuned",
+  "version": "1.0.0",
+  "generator": "tools/plugin.mjs pack",
+  "files": {
+    "README.md": {
+      "sha256": "d107c82429be9bcc6bb400c0b7a8aad2078dedbf03575aa5faf71dc1c35ed349",
+      "bytes": 407
+    },
+    "plugin.json": {
+      "sha256": "a11861b36b335c9927f8ff06b62eba9b477cb54c9ebd217cc7a16e24574e243a",
+      "bytes": 534
+    },
+    "sim/index.js": {
+      "sha256": "72a4e491cc816b1906d94c712cf6f0a1d48b0bd64fc01af4c657f9596c461617",
+      "bytes": 13229
+    },
+    "test/lemuen.test.js": {
+      "sha256": "1650f3b57519603839fa647ea7bd3b4ab46e9a90a4de08a9b2db78965f3afc39",
+      "bytes": 4455
+    }
+  },
+  "spine": {}
+}

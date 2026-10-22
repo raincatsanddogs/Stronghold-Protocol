@@ -1,0 +1,25 @@
+{
+  "$schema": "../../schemas/plugin.schema.json",
+  "manifest": 2,
+  "id": "lemuen-tuned",
+  "name": {
+    "zh": "蕾缪安三技能调优"
+  },
+  "description": "蕾缪安三技能基准锁定间隔回调至0.5s（仅吃攻速加成），恢复33发轰炸硬上限并保留全弹轰炸。",
+  "version": "1.0.0",
+  "app": ">=0.3.0 <0.4.0",
+  "api": 1,
+  "class": "script",
+  "scope": [
+    "room"
+  ],
+  "permissions": [
+    "sim.code"
+  ],
+  "overrides": [
+    "chess_char_6_01_a"
+  ],
+  "entry": {
+    "sim": "sim/index.js"
+  }
+}

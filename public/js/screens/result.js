@@ -228,17 +228,6 @@ function DamageRankingView({ players = [], myId = null, filterId = 'all', onSele
     </div>
   `;
 }
-
-/** RESULT screen of the match on screen: reads the store; 返回同盟 / 返回大厅 drops the match. */
-export function ResultScreen() {
-  const res = useStore((s) => s.match.result);
-  const pub = useStore((s) => s.match.public);
-  const myId = useStore((s) => s.me.playerId);
-  const hasRoom = useStore((s) => !!s.room);
-  const content = useStore((s) => s.room?.content ?? null);
-  const back = () => store.set({ match: emptyMatch() });
-  return html`<${ResultView} res=${res} pub=${pub} myId=${myId} backLabel=${hasRoom ? t('返回同盟') : t('返回大厅')} onBack=${back} content=${content} />`;
-}
 /**
  * The settlement view of one m.result payload — the live flow's 数据详情 (screens/settle.js), and the stats page's
  * re-view of a stored match (screens/stats.js, which hands it the payload recordToResult rebuilt; `quiet`: no settlement

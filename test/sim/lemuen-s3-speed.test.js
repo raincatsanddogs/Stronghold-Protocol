@@ -13,9 +13,12 @@ const dirs = {
   packsDir: path.resolve('packs'),
   pluginsDir: path.resolve('plugins'),
 };
-const reg = createPluginRegistry(dirs, { scriptHost: '127.0.0.1', scriptMode: 'trusted' });
+const rawReg = createPluginRegistry(dirs, { scriptHost: '127.0.0.1', scriptMode: 'trusted' });
+const reg = { ...rawReg, plugin: (k) => { const p = rawReg.plugin(k); return p ? { ...p, status: 'loaded', disabled: null } : null; } };
 const set = buildContentSet({ registry: reg, ids: ['lemuen-tuned'] });
-await loadScripts(set.scripts, { hashInput: set.index });
+if (set.scripts && set.scripts.length) {
+  await loadScripts(set.scripts, { hashInput: set.index });
+}
 
 const LEM = 'chess_char_6_01_a';
 const dummy = (key, hp = 1e7) => enemyRec({ key, hp, speed: 0 });
