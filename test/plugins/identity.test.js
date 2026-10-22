@@ -201,13 +201,15 @@ describe('the wire: welcome, room.state, the match, /healthz, /cs/, BattleSpec, 
   }
   let srv;
   const clients = [];
+  const emptyPlugins = tmpdir('empty-plugins');
   before(async () => {
     const { startServer } = await import('../../server/index.js');
-    srv = await startServer({ port: 0, host: '127.0.0.1', quiet: true, MatchClass: RecordingStub });
+    srv = await startServer({ port: 0, host: '127.0.0.1', quiet: true, MatchClass: RecordingStub, pluginsDir: emptyPlugins });
   });
   after(async () => {
     await Promise.all(clients.map((c) => c.terminate().catch(() => {})));
     await srv.close();
+    try { fs.rmSync(emptyPlugins, { recursive: true, force: true }); } catch {}
   });
 
   test('welcome.content, room.state.content (always the vanilla set) and the match\'s opts.cs', async () => {
