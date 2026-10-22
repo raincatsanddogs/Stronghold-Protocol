@@ -1,6 +1,21 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import path from 'node:path';
 import { makeBattle, enemyRec, checkInvariants } from '../helpers/battleHarness.js';
+import { createPluginRegistry } from '../../server/plugins/registry.js';
+import { buildContentSet } from '../../server/plugins/contentSet.js';
+import { loadScripts } from '../../shared/plugins/scriptLoad.js';
+
+// Load lemuen-tuned plugin script for S3 ASPD tuning tests
+const dirs = {
+  publicDir: path.resolve('public'),
+  dataDir: path.resolve('data'),
+  packsDir: path.resolve('packs'),
+  pluginsDir: path.resolve('plugins'),
+};
+const reg = createPluginRegistry(dirs, { scriptHost: '127.0.0.1', scriptMode: 'trusted' });
+const set = buildContentSet({ registry: reg, ids: ['lemuen-tuned'] });
+await loadScripts(set.scripts, { hashInput: set.index });
 
 const LEM = 'chess_char_6_01_a';
 const dummy = (key, hp = 1e7) => enemyRec({ key, hp, speed: 0 });
